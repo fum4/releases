@@ -7,7 +7,7 @@
 # SHA256SUMS (that tag's) and date (YYYY-MM-DD, when that SHA256SUMS was uploaded). A
 # package with no latest is not released yet and is left out. Order, descriptions and
 # source links come from ./packages. The page makes no external request: styles inline, one inline script
-# (the install window's lights and the copy buttons, allowed by its CSP hash; the page works without it),
+# (the install window's lights, the copy buttons and the background grid's motion, allowed by its CSP hash; the page works without it),
 # fonts from the bucket's own _assets/.
 set -eu
 

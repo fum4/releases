@@ -12,9 +12,12 @@ Nomadware.io `apps/marketing/src/components/site-nav.astro`, `logo-mark.astro`,
 (close / fold / in-page full screen, hover glyphs): `window.css`, `window-lights.ts`,
 `window-controls.ts`, `window-maximize.ts` ported to plain inline JS in the template and
 `bin/render-index`, minus the analytics, and of the page's grid paper and column halo
-(`global.css` `.frame`, `tokens.css` `--grid*` / `--halo-column`; static, without the cursor
-warp of `grid-warp.ts`, the film grain and the site's no-light-scheme: light is the same lines in
-black). Nothing keeps them in
+(`global.css` `.frame`, `tokens.css` `--grid*` / `--halo-column`, with its motion, ported to the
+template's inline script: `grid-warp.ts` (cursor warp canvas) with `grid-bend.ts`, `grid-stroke.ts`,
+`grid-glow.ts`, `cursor-field.ts`, `cursor-presence.ts`, `motion.ts`, and `grid-parallax.ts`, minus
+the bands, black hole, waves and pinned stage this page lacks; plus the film grain; light is the site's
+no-light-scheme lines in black, glow included; `img-src` gains `data:` for the grain).
+Nothing keeps them in
 step: a nav or window change on the site
 leaves this page stale. First step: a check in Nomadware.io (it has both sources on the
 box, and this repo is public, its CI can't read the private one) that extracts the nav's
