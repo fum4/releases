@@ -58,7 +58,7 @@ check 'install.sh moved after every versioned object' sh -c "
 	last_v=\$(grep -n '^copyto nomadware-releases/waker/v1.2.0/' '$FAKE_LOG' | tail -1 | cut -d: -f1)
 	inst=\$(grep -n '^copyto nomadware-releases/waker/install.sh' '$FAKE_LOG' | cut -d: -f1)
 	[ \"\$inst\" -gt \"\$last_v\" ]"
-check 'index.html is up' grep -q 'curl -fsSL file://.*/waker/install.sh | sh' "$b/index.html"
+check 'index.html is up' grep -q 'data-copy="curl -fsSL file://.*/waker/install.sh | sh"' "$b/index.html"
 check 'fonts are up' test -f "$b/_assets/fonts/geist-latin-400-normal.woff2"
 check 'index.json is valid JSON' sh -c "jq -e '.packages[0].version == \"v1.2.0\" and (.packages[0].assets | length) == 4' '$b/index.json'"
 
@@ -83,8 +83,16 @@ rm "$SANDBOX/eph-dist/eph-darwin-amd64"
 check 'publish ephedra v0.2.0 (three platforms)' creds "$PUBLISH" ephedra v0.2.0 "$SANDBOX/eph-dist"
 check 'the index lists both packages, in order' sh -c "jq -r '.packages[].name' '$b/index.json' | paste -sd' ' - | grep -qx 'waker ephedra'"
 check 'the index offers only the platforms built' sh -c "jq -e '(.packages[1].assets | map(.platform)) == [\"linux-amd64\",\"linux-arm64\",\"darwin-arm64\"]' '$b/index.json'"
-check 'the html escapes descriptions' sh -c "! grep -q '<script' '$b/index.html'"
-check 'the html makes no external request' sh -c "! grep -Eo '(src|href)=\"https?://[^\"]*' '$b/index.html' | grep -v 'https://github.com/fum4/releases' | grep -q ."
+check 'the only script on the page is its own' sh -c "[ \$(grep -c '<script' '$b/index.html') = 1 ]"
+# Links to nomadware.io and GitHub are navigation, not requests: nothing the page loads (src=, url(), a stylesheet) leaves the bucket.
+# csp_ok page: the CSP's script hash is the page's inline script, hashed as a browser does.
+csp_ok() {
+	want=$(sed -n "s/.*script-src 'sha256-\([^']*\)'.*/\1/p" "$1")
+	got=$({ printf '\n'; awk '/^<script>$/ { on = 1; next } /^<\/script>$/ { on = 0 } on' "$1"; } | openssl dgst -sha256 -binary | base64)
+	[ -n "$want" ] && [ "$want" = "$got" ]
+}
+check 'the CSP allows exactly the inline script' csp_ok "$b/index.html"
+check 'the html makes no external request' sh -c "! grep -Eo '(src=\"https?:|url\(https?:|<link[^>]*href=\"https?:)' '$b/index.html' | grep -q ."
 
 # --index-only rebuilds from the bucket alone.
 rm "$b/index.html"
@@ -102,7 +110,7 @@ sed -i.bak 's#^waker .*#waker | waker | <b>bold</b> \& "quoted"#' "$TREPO/packag
 check 'render-index' "$TREPO/bin/render-index" "$st" "$SANDBOX/idx"
 check 'html escapes &, <, >, quotes' grep -qF '&lt;b&gt;bold&lt;/b&gt; &amp; &quot;quoted&quot;' "$SANDBOX/idx/index.html"
 check 'json escapes quotes' sh -c "jq -e '.packages[0].description == \"<b>bold</b> & \\\"quoted\\\"\"' '$SANDBOX/idx/index.json'"
-check 'only built platforms are linked' sh -c "grep -c 'class=\"file\"' '$SANDBOX/idx/index.html' | grep -qx 1"
+check 'only built platforms are linked' sh -c "grep -c 'class=\"p\"' '$SANDBOX/idx/index.html' | grep -qx 1"
 echo latest >"$st/waker/latest"
 refuses 'a latest that is not a tag' 'not a vMAJOR' "$TREPO/bin/render-index" "$st" "$SANDBOX/idx"
 
