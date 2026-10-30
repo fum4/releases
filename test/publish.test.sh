@@ -117,7 +117,7 @@ check 'no source link when the package has none' sh -c "! grep -q 'class=\"src\"
 # is also what keeps markup out of the href.
 sed -i.bak 's#^waker .*#waker | waker | desc | https://github.com/fum4/waker#' "$TREPO/packages"
 check 'render-index with a source' "$TREPO/bin/render-index" "$st" "$SANDBOX/idx"
-check 'the source link renders' grep -qF '<a class="src" href="https://github.com/fum4/waker" aria-label="Source on GitHub"><svg' "$SANDBOX/idx/index.html"
+check 'the source link renders' grep -qF '<a class="src" href="https://github.com/fum4/waker" target="_blank" rel="noopener noreferrer" aria-label="Source on GitHub"><svg' "$SANDBOX/idx/index.html"
 check 'the source link is the only one' sh -c "[ \$(grep -c 'class=\"src\"' '$SANDBOX/idx/index.html') = 1 ]"
 for bad in 'http://github.com/fum4/waker' 'https://github.com/other/waker' 'https://github.com/fum4/' 'https://github.com/fum4/a/b' 'https://github.com/fum4/w"x' 'https://example.com/fum4/waker'; do
 	sed -i.bak "s#^waker .*#waker | waker | desc | $bad#" "$TREPO/packages"

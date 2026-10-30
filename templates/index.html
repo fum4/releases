@@ -87,7 +87,7 @@ h1 { margin: 0; font-size: 28px; font-weight: 600; letter-spacing: -0.02em; }
 .pkg h2 a { text-decoration: none; }
 .name { display: inline-flex; align-items: center; gap: 8px; }
 .src { display: inline-flex; color: var(--dim); transition: color 0.15s; }
-.src:hover { color: var(--fg); }
+.src:hover, .src:focus-visible { color: var(--fg); }
 .src svg { width: 0.85em; height: 0.85em; fill: currentColor; }
 .meta { font-size: 14px; font-weight: 400; color: var(--dim); }
 .meta b { font-weight: 400; color: var(--accent); }
@@ -114,11 +114,12 @@ h1 { margin: 0; font-size: 28px; font-weight: 600; letter-spacing: -0.02em; }
 .dl-label { display: inline-flex; align-items: center; gap: 6px; color: var(--fg); }
 .dl-label svg { width: 1.1em; height: 1.1em; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .dl a { color: var(--dim); text-decoration-color: var(--line-strong); text-underline-offset: 3px; }
-.dl a:hover { color: var(--fg); }
+.dl a:hover, .dl a:focus-visible { color: var(--fg); }
 footer { margin-top: 96px; font-size: 12px; color: var(--dim); }
 footer p { margin: 6px 0 0; }
 footer code { font: 400 11px/1.5 var(--mono); word-break: break-all; }
 footer a { color: var(--dim); }
+footer a:hover, footer a:focus-visible { color: var(--fg); }
 </style>
 </head>
 <body>
@@ -139,7 +140,7 @@ footer a { color: var(--dim); }
 @CARDS@
 <footer>
 <p>Signed with <code>nomadware-release</code>: <code>@KEY@</code></p>
-<p><a href="/index.json">index.json</a> · <a href="https://github.com/fum4/releases">source</a></p>
+<p><a href="/index.json" target="_blank" rel="noopener noreferrer">index.json</a> · <a href="https://github.com/fum4/releases" target="_blank" rel="noopener noreferrer">source</a></p>
 </footer>
 </main>
 <script>

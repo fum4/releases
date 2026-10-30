@@ -53,7 +53,7 @@ for pkg in $(pkg_names); do
 	name_html="<a href=\"#$pkg\">$pkg</a>"
 	if [ -n "$source" ]; then
 		warn_unless_public "$source"
-		name_html="<span class=\"name\">$name_html<a class=\"src\" href=\"$(html_esc "$source")\" aria-label=\"Source on GitHub\">$GITHUB_MARK</a></span>"
+		name_html="<span class=\"name\">$name_html<a class=\"src\" href=\"$(html_esc "$source")\" target=\"_blank\" rel=\"noopener noreferrer\" aria-label=\"Source on GitHub\">$GITHUB_MARK</a></span>"
 	fi
 	rel=$base/$pkg/$tag
 	install="curl -fsSL $base/$pkg/install.sh | sh"
