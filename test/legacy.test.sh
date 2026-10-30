@@ -16,7 +16,8 @@ printf '%s\n' 'openkit | openkit | The <b>platform</b> & "agents". | https://git
 check 'render with a legacy package' render
 html=$idx/index.html
 check 'a Legacy section with its muted line' sh -c "grep -qF '<h2 class=\"section\" id=\"legacy-title\">Legacy</h2>' '$html' && grep -qF 'No longer developed. Downloads stay up.' '$html'"
-check 'the entry has a legacy tag, version and date' sh -c "grep -qF '<span class=\"tag\">legacy</span> <span class=\"meta\"><b>v0.0.66</b> · 2026-03-24</span>' '$html'"
+check 'the entry has a legacy tag, version and date' sh -c "grep -qF '<span class=\"tag\">legacy</span> <span class=\"meta\"><span class=\"ver\">v0.0.66</span> · 2026-03-24</span>' '$html'"
+check 'the legacy version is muted, never the accent (<b>)' sh -c "grep -qF '.ver { color: var(--dim); }' '$html' && ! sed -n '/id=\"legacy\"/,\$p' '$html' | grep -q '<b>'"
 check 'the GitHub icon opens the repo in a new tab' grep -qF '<a class="src" href="https://github.com/fum4/openkit" target="_blank" rel="noopener noreferrer" aria-label="Source on GitHub"><svg' "$html"
 check 'the three download labels, in order' sh -c "grep -o 'class=\"p\" href=\"[^\"]*\">[^<]*' '$html' | sed 's/.*>//' | paste -sd'|' - | grep -qxF 'macOS (Apple Silicon) .dmg|macOS (Intel) .dmg|Linux .AppImage'"
 check 'downloads link the release assets' sh -c "grep -qF 'href=\"https://github.com/fum4/openkit/releases/download/v0.0.66/OpenKit-0.0.66-arm64.dmg\">macOS (Apple Silicon) .dmg' '$html' && grep -qF 'OpenKit-0.0.66.AppImage\">Linux .AppImage' '$html'"

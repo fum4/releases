@@ -150,7 +150,7 @@ EOF
 	story_html=''
 	[ -z "$story" ] || story_html=" <a class=\"story\" href=\"$(html_esc "$story")\">why it stopped →</a>"
 	legacy_cards="$legacy_cards<article class=\"pkg\" id=\"$pkg\">
-<h2><span class=\"name\">$pkg<a class=\"src\" href=\"$(html_esc "$source")\" target=\"_blank\" rel=\"noopener noreferrer\" aria-label=\"Source on GitHub\">$GITHUB_MARK</a></span> <span class=\"tag\">legacy</span> <span class=\"meta\"><b>$tag</b> · $date</span></h2>
+<h2><span class=\"name\">$pkg<a class=\"src\" href=\"$(html_esc "$source")\" target=\"_blank\" rel=\"noopener noreferrer\" aria-label=\"Source on GitHub\">$GITHUB_MARK</a></span> <span class=\"tag\">legacy</span> <span class=\"meta\"><span class=\"ver\">$tag</span> · $date</span></h2>
 <p class=\"desc\">$(html_esc "$desc")$story_html</p>
 <p class=\"dl\"><span class=\"dl-label\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M12 4v11M7 10l5 5 5-5M5 20h14\"/></svg>Download</span>$links</p>
 </article>
