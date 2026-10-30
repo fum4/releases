@@ -18,8 +18,8 @@ config_get() {
 	printf '%s\n' "$v"
 }
 
-# pkg_field name n prints field n (1 name, 2 binary, 3 description, 4 source) of a
-# package in ./packages, trimmed; fails when the package is not listed.
+# pkg_field name n prints field n (1 name, 2 binary, 3 description, 4 source, 5 kind,
+# 6 story link) of a package in ./packages, trimmed; fails when the package is not listed.
 pkg_field() {
 	awk -F'|' -v p="$1" -v n="$2" '
 		/^[[:space:]]*(#|$)/ { next }
@@ -28,13 +28,41 @@ pkg_field() {
 		END { exit !found }' "$ROOT/packages"
 }
 
-# pkg_names prints every package name, in index order.
+# pkg_names prints every package published through the bucket, in index order; legacy_names
+# the legacy ones (kind "legacy"), which are downloaded from their repo's GitHub release.
 pkg_names() {
-	awk -F'|' '/^[[:space:]]*(#|$)/ { next } { gsub(/[[:space:]]/, "", $1); print $1 }' "$ROOT/packages"
+	awk -F'|' '/^[[:space:]]*(#|$)/ { next } { for (i = 1; i <= NF; i++) gsub(/^[[:space:]]+|[[:space:]]+$/, "", $i) } $5 != "legacy" { print $1 }' "$ROOT/packages"
+}
+legacy_names() {
+	awk -F'|' '/^[[:space:]]*(#|$)/ { next } { for (i = 1; i <= NF; i++) gsub(/^[[:space:]]+|[[:space:]]+$/, "", $i) } $5 == "legacy" { print $1 }' "$ROOT/packages"
 }
 
+# pkg_known: a package the bucket serves (publish, render-install, the index's main list).
 pkg_known() {
+	pkg_listed "$1"
+	[ "$(pkg_field "$1" 5)" != legacy ] || die "$1 is legacy: it is downloaded from its GitHub release, not the bucket"
+}
+
+# legacy_known: a legacy package needs a public source repo, and may carry a story link.
+legacy_known() {
+	pkg_listed "$1"
+	[ "$(pkg_field "$1" 5)" = legacy ] || die "$1 is not a legacy package"
+	[ -n "$(pkg_field "$1" 4)" ] || die "packages: legacy package $1 needs a source repo (its downloads are that repo's GitHub release)"
+	story=$(pkg_field "$1" 6)
+	case $story in
+	'') ;;
+	https://nomadware.io/blog/ | https://nomadware.io/blog/*[!a-z0-9-]*) die "packages: story of $1 must be https://nomadware.io/blog/<slug>, got '$story'" ;;
+	https://nomadware.io/blog/*) ;;
+	*) die "packages: story of $1 must be https://nomadware.io/blog/<slug>, got '$story'" ;;
+	esac
+}
+
+pkg_listed() {
 	pkg_field "$1" 1 >/dev/null || die "unknown package '$1': add it to packages (README.md § Adding a package)"
+	case $(pkg_field "$1" 5) in
+	'' | legacy) ;;
+	*) die "packages: kind of $1 must be empty or 'legacy', got '$(pkg_field "$1" 5)'" ;;
+	esac
 	# Both end up in URLs, object keys, file names and the rendered install.sh.
 	for v in "$1" "$(pkg_field "$1" 2)"; do
 		case $v in

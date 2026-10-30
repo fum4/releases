@@ -118,6 +118,7 @@ mkdir -p "$st/waker"
 echo v9.9.9 >"$st/waker/latest"
 echo 2026-01-02 >"$st/waker/date"
 printf '%s  waker-linux-amd64\n' "$(printf '%064d' 0 | tr 0 a)" >"$st/waker/SHA256SUMS"
+sed -i.bak "/^openkit/d" "$TREPO/packages" # legacy rendering has its own test (legacy.test.sh)
 sed -i.bak 's#^waker .*#waker | waker | <b>bold</b> \& "quoted"#' "$TREPO/packages"
 check 'render-index' "$TREPO/bin/render-index" "$st" "$SANDBOX/idx"
 check 'html escapes &, <, >, quotes' grep -qF '&lt;b&gt;bold&lt;/b&gt; &amp; &quot;quoted&quot;' "$SANDBOX/idx/index.html"

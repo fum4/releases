@@ -6,7 +6,9 @@
 # <state-dir>/<pkg>/ holds what bin/publish read from the bucket: latest (one tag line),
 # SHA256SUMS (that tag's) and date (YYYY-MM-DD, when that SHA256SUMS was uploaded). A
 # package with no latest is not released yet and is left out. Order, descriptions and
-# source links come from ./packages. The page makes no external request: styles inline, one inline script
+# source links come from ./packages. Legacy packages (kind "legacy") are not in the bucket:
+# their tag, date and assets are read from the source repo's latest GitHub release at render
+# time (gh, else curl; a failure stops the render). The page makes no external request: styles inline, one inline script
 # (the install window's lights, the copy buttons and the background grid's motion, allowed by its CSP hash; the page works without it),
 # fonts from the bucket's own _assets/.
 set -eu
@@ -92,9 +94,84 @@ for pkg in $(pkg_names); do
 done
 [ -n "$cards" ] || cards='<p class="desc">Nothing released yet.</p>'
 
+# ── Legacy: no bucket, no installer; downloads are the source repo's latest GitHub release ──
+# fetch_release repo: that release's JSON on stdout. RENDER_INDEX_RELEASES_DIR=<dir> reads
+# <dir>/<repo>.json instead (the tests' fixtures: no network). A failure stops the render,
+# so the page is never silently stale.
+fetch_release() {
+	if [ -n "${RENDER_INDEX_RELEASES_DIR:-}" ]; then
+		cat "$RENDER_INDEX_RELEASES_DIR/$1.json" || die "no release fixture for $1"
+		return
+	fi
+	if command -v gh >/dev/null && rel_json=$(gh api "repos/fum4/$1/releases/latest" 2>"$out/gh.err"); then
+		printf '%s\n' "$rel_json"
+	elif rel_json=$(curl -fsSL -H 'Accept: application/vnd.github+json' "https://api.github.com/repos/fum4/$1/releases/latest" 2>"$out/curl.err"); then
+		printf '%s\n' "$rel_json"
+	else
+		die "cannot fetch the latest release of fum4/$1: $(cat "$out/gh.err" "$out/curl.err" 2>/dev/null | tr '\n' ' ')"
+	fi
+}
+
+# The download rows a legacy release may have, in this order: label, asset-name regex.
+LEGACY_ASSETS='macOS (Apple Silicon) .dmg|-arm64\.dmg$
+macOS (Intel) .dmg|-x64\.dmg$
+Linux .AppImage|\.AppImage$'
+
+legacy_cards='' legacy_entries='' legacy_n=0
+command -v jq >/dev/null || die "jq is required to read legacy releases"
+for pkg in $(legacy_names); do
+	legacy_known "$pkg"
+	desc=$(pkg_field "$pkg" 3)
+	source=$(pkg_field "$pkg" 4)
+	story=$(pkg_field "$pkg" 6)
+	repo=${source#https://github.com/fum4/}
+	warn_unless_public "$source"
+	release=$(fetch_release "$repo")
+	tag=$(printf '%s' "$release" | jq -r '.tag_name // empty') || die "$pkg: the latest release of fum4/$repo is not JSON"
+	is_tag "$tag" || die "$pkg: latest release of fum4/$repo is '$tag', not a vMAJOR.MINOR.PATCH tag"
+	date=$(printf '%s' "$release" | jq -r '.published_at // empty' | cut -c1-10)
+	case $date in
+	[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]) ;;
+	*) die "$pkg: release date is '$date', not YYYY-MM-DD" ;;
+	esac
+	links='' assets=''
+	while IFS='|' read -r label re; do
+		# Only assets the release has, and only from this repo's own release downloads.
+		url=$(printf '%s' "$release" | jq -r --arg re "$re" --arg pre "$source/releases/download/" \
+			'first(.assets[]? | select((.name | test($re)) and (.browser_download_url | startswith($pre)))) | .browser_download_url // empty') || die "$pkg: cannot read the assets of $tag"
+		[ -n "$url" ] || continue
+		links="$links<a class=\"p\" href=\"$(html_esc "$url")\">$(html_esc "$label")</a>"
+		[ -z "$assets" ] || assets="$assets,"
+		assets="$assets{\"label\":\"$(json_esc "$label")\",\"url\":\"$(json_esc "$url")\"}"
+	done <<EOF
+$LEGACY_ASSETS
+EOF
+	[ -n "$assets" ] || die "$pkg $tag: the release has no .dmg or .AppImage asset"
+	story_html=''
+	[ -z "$story" ] || story_html=" <a class=\"story\" href=\"$(html_esc "$story")\">why it stopped →</a>"
+	legacy_cards="$legacy_cards<article class=\"pkg\" id=\"$pkg\">
+<h2><span class=\"name\">$pkg<a class=\"src\" href=\"$(html_esc "$source")\" target=\"_blank\" rel=\"noopener noreferrer\" aria-label=\"Source on GitHub\">$GITHUB_MARK</a></span> <span class=\"tag\">legacy</span> <span class=\"meta\"><b>$tag</b> · $date</span></h2>
+<p class=\"desc\">$(html_esc "$desc")$story_html</p>
+<p class=\"dl\"><span class=\"dl-label\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M12 4v11M7 10l5 5 5-5M5 20h14\"/></svg>Download</span>$links</p>
+</article>
+"
+	[ "$legacy_n" = 0 ] || legacy_entries="$legacy_entries,"
+	legacy_entries="$legacy_entries
+    {\"name\":\"$pkg\",\"description\":\"$(json_esc "$desc")\",\"version\":\"$tag\",\"date\":\"$date\",\"source\":\"$(json_esc "$source")\",\"story\":\"$(json_esc "$story")\",\"assets\":[$assets]}"
+	legacy_n=$((legacy_n + 1))
+done
+rm -f "$out/gh.err" "$out/curl.err"
+if [ -n "$legacy_cards" ]; then
+	cards="$cards<section class=\"legacy\" id=\"legacy\" aria-labelledby=\"legacy-title\">
+<h2 class=\"section\" id=\"legacy-title\">Legacy</h2>
+<p class=\"desc\">No longer developed. Downloads stay up.</p>
+$legacy_cards</section>
+"
+fi
+
 {
-	printf '{\n  "base": "%s",\n  "signing_key": "%s",\n  "packages": [%s\n  ]\n}\n' \
-		"$base" "$(json_esc "$(cut -d' ' -f1,2 "$PUBKEY_FILE")")" "$entries"
+	printf '{\n  "base": "%s",\n  "signing_key": "%s",\n  "packages": [%s\n  ],\n  "legacy": [%s\n  ]\n}\n' \
+		"$base" "$(json_esc "$(cut -d' ' -f1,2 "$PUBKEY_FILE")")" "$entries" "$legacy_entries"
 } >"$json"
 
 key=$(html_esc "$(cut -d' ' -f1,2 "$PUBKEY_FILE")")
@@ -113,4 +190,4 @@ sed -e "/@CARDS@/{r $out/cards.tmp" -e 'd' -e '}' -e "s|@KEY@|$key|" -e "s|@SCRI
 rm -f "$out/cards.tmp"
 mv -f "$html" "$out/index.html"
 mv -f "$json" "$out/index.json"
-echo "rendered $out/index.html and index.json ($n packages)" >&2
+echo "rendered $out/index.html and index.json ($n packages, $legacy_n legacy)" >&2

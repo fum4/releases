@@ -60,6 +60,8 @@ make_repo() {
 	TEST_KEY=$(base64 <"$SANDBOX/test-key" | tr -d '\n')
 	# The signing key's temp dir: a tmpfs is not guaranteed in CI, so the runner's rule.
 	export GITHUB_ACTIONS=true RUNNER_TEMP="$SANDBOX"
+	# Legacy packages read their GitHub release from here instead of the network.
+	export RENDER_INDEX_RELEASES_DIR="$REPO/test/fixtures/releases"
 	unset XDG_RUNTIME_DIR
 }
 
