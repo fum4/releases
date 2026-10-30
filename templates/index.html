@@ -35,6 +35,9 @@
   --mono: "Geist Mono", ui-monospace, monospace;
   --leading: 1.28;
   --grid: 64px;
+  --grid-line: 1px;
+  --grid-color: rgba(255, 255, 255, 0.045);
+  --halo-column: rgba(12, 11, 18, 0.6);
   --content-width: 1100px;
   --column: 640px;
   --overlay-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
@@ -51,6 +54,8 @@
     --dim: #686676;
     --line: rgba(0, 0, 0, 0.07);
     --line-strong: rgba(0, 0, 0, 0.14);
+    --grid-color: rgba(0, 0, 0, 0.045);
+    --halo-column: rgba(251, 251, 253, 0.6);
     /* The lime fails contrast on white: the same hue, darkened to 4.5:1. */
     --accent: #4d7a00;
   }
@@ -61,6 +66,25 @@ body { margin: 0; line-height: var(--leading); -webkit-font-smoothing: antialias
 a { color: inherit; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+
+/* ── background grid: nomadware.io's grid paper (global.css .frame, tokens.css), as the site's
+   first paint draws it: static CSS, without the cursor warp (grid-warp.ts), which needs the
+   site's scripts. Layers, bottom to top: grid paper, then the column halo (::before, an ink
+   veil down the content column with eased sides that quiets the lines behind the text), then
+   the page (.wrap, main). The site has no light scheme; light here is the same lines in black. */
+.frame {
+  --column-core: calc(var(--content-width) / 2);
+  --column-fade: 320px;
+  --column-halo: linear-gradient(90deg, transparent calc(50% - var(--column-core) - var(--column-fade)), color-mix(in srgb, var(--halo-column) 15.6%, transparent) calc(50% - var(--column-core) - var(--column-fade) * 0.75), color-mix(in srgb, var(--halo-column) 50%, transparent) calc(50% - var(--column-core) - var(--column-fade) * 0.5), color-mix(in srgb, var(--halo-column) 84.4%, transparent) calc(50% - var(--column-core) - var(--column-fade) * 0.25), var(--halo-column) calc(50% - var(--column-core)), var(--halo-column) calc(50% + var(--column-core)), color-mix(in srgb, var(--halo-column) 84.4%, transparent) calc(50% + var(--column-core) + var(--column-fade) * 0.25), color-mix(in srgb, var(--halo-column) 50%, transparent) calc(50% + var(--column-core) + var(--column-fade) * 0.5), color-mix(in srgb, var(--halo-column) 15.6%, transparent) calc(50% + var(--column-core) + var(--column-fade) * 0.75), transparent calc(50% + var(--column-core) + var(--column-fade)));
+  position: relative; isolation: isolate; min-height: 100vh;
+  background-image: linear-gradient(var(--grid-color) var(--grid-line), transparent var(--grid-line)), linear-gradient(90deg, var(--grid-color) var(--grid-line), transparent var(--grid-line));
+  background-size: var(--grid) var(--grid);
+}
+.frame::before { content: ''; position: absolute; inset: 0; z-index: 1; pointer-events: none; background-image: var(--column-halo); }
+.frame > .wrap, .frame > main { position: relative; z-index: 2; }
+/* Phones: the halo covers the whole screen, so the lines keep a stronger alpha (the site's 640 px step). */
+@media (max-width: 640px) { :root { --grid-color: rgba(255, 255, 255, 0.07); } }
+@media (max-width: 640px) and (prefers-color-scheme: light) { :root { --grid-color: rgba(0, 0, 0, 0.07); } }
 
 /* ── top bar: nomadware.io's ─────────────────────────────────────────────── */
 .wrap { --wrap-pad-x: 44px; --wrap-pad-top: 26px; max-width: var(--content-width); margin: 0 auto; padding: var(--wrap-pad-top) var(--wrap-pad-x) 0; }
@@ -154,6 +178,7 @@ footer a:hover, footer a:focus-visible { color: var(--fg); }
 </style>
 </head>
 <body>
+<div class="frame">
 <div class="wrap">
 <header>
 <nav aria-label="Primary">
@@ -174,6 +199,7 @@ footer a:hover, footer a:focus-visible { color: var(--fg); }
 <p><a href="/index.json" target="_blank" rel="noopener noreferrer">index.json</a> · <a href="https://github.com/fum4/releases" target="_blank" rel="noopener noreferrer">source</a></p>
 </footer>
 </main>
+</div>
 <script>
 // The install terminal's lights: nomadware.io's window behaviour (Nomadware.io apps/marketing
 // src/scripts/window/window-controls.ts, window-maximize.ts), without its analytics. Red takes
