@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; font-src 'self'; base-uri 'none'; form-action 'none'">
+<title>Nomadware releases</title>
+<meta name="description" content="Signed, one-line installs for every Nomadware package.">
+<link rel="alternate" type="application/json" href="/index.json">
+<link rel="preload" href="/_assets/fonts/geist-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<style>
+/* Rendered by fum4/releases bin/render-index from templates/index.html: edit the template.
+   Tokens: Nomadware.io apps/marketing/src/styles/tokens.css (same names, same values). */
+@font-face { font-family: Geist; font-weight: 400; font-display: swap; src: url(/_assets/fonts/geist-latin-400-normal.woff2) format("woff2"); }
+@font-face { font-family: Geist; font-weight: 600; font-display: swap; src: url(/_assets/fonts/geist-latin-600-normal.woff2) format("woff2"); }
+@font-face { font-family: "Geist Mono"; font-weight: 400; font-display: swap; src: url(/_assets/fonts/geist-mono-latin-400-normal.woff2) format("woff2"); }
+:root {
+  --ink: #0c0b12;
+  --line: rgba(255, 255, 255, 0.07);
+  --line-strong: rgba(255, 255, 255, 0.14);
+  --grid-color: rgba(255, 255, 255, 0.045);
+  --fg: #ecebf3;
+  --soft: #b9b7c8;
+  --dim: #8a889c;
+  --faint: #7c7a91;
+  --sig: #c6ff4a;
+  --sig-soft: rgba(198, 255, 74, 0.22);
+  --panel: rgba(19, 18, 28, 0.72);
+  --term: rgba(8, 8, 13, 0.88);
+  --chip: rgba(255, 255, 255, 0.08);
+  --sans: Geist, system-ui, sans-serif;
+  --mono: "Geist Mono", ui-monospace, monospace;
+  --leading: 1.28;
+  --radius: 12px;
+  --radius-sm: 6px;
+  --reading-width: 720px;
+  --grid: 64px;
+}
+* { box-sizing: border-box; }
+html { background: var(--ink); color-scheme: dark; }
+body {
+  margin: 0; min-height: 100vh; color: var(--fg); font: 400 16px/var(--leading) var(--sans);
+  background-image:
+    linear-gradient(var(--grid-color) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
+  background-size: var(--grid) var(--grid);
+}
+main { max-width: var(--reading-width); margin: 0 auto; padding: 72px 20px 96px; }
+h1 { margin: 0 0 8px; font-size: 32px; font-weight: 600; letter-spacing: -0.02em; }
+h1 b { color: var(--sig); font-weight: 600; }
+.lead { margin: 0 0 40px; color: var(--soft); }
+a { color: var(--fg); text-decoration-color: var(--line-strong); text-underline-offset: 3px; }
+a:hover { color: var(--sig); text-decoration-color: var(--sig-soft); }
+.pkg { margin: 0 0 20px; padding: 22px 24px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); }
+.pkg header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+h2 { margin: 0; font: 600 20px/var(--leading) var(--mono); }
+.ver { margin: 0; font: 400 14px/var(--leading) var(--mono); color: var(--sig); }
+.ver span { color: var(--dim); }
+.desc { margin: 8px 0 16px; color: var(--soft); }
+.install { margin: 0 0 16px; padding: 12px 14px; overflow-x: auto; background: var(--term); border: 1px solid var(--line-strong); border-radius: var(--radius-sm); }
+/* One tap or click selects the whole line: copyable without JS. */
+.install code { font: 400 14px/var(--leading) var(--mono); color: var(--fg); user-select: all; -webkit-user-select: all; white-space: pre-wrap; overflow-wrap: anywhere; }
+.install code::before { content: "$ "; color: var(--faint); user-select: none; -webkit-user-select: none; }
+.dl { list-style: none; margin: 0 0 12px; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 6px 16px; }
+.dl li { display: flex; flex-direction: column; padding: 8px 10px; background: var(--chip); border-radius: var(--radius-sm); }
+.dl a { font-weight: 600; font-size: 14px; }
+.file { font: 400 12px/var(--leading) var(--mono); color: var(--dim); }
+.sums { margin: 0; font-size: 13px; color: var(--dim); }
+.sums a { color: var(--dim); }
+footer { margin-top: 40px; font-size: 13px; color: var(--dim); }
+footer code { font: 400 12px/1.5 var(--mono); color: var(--faint); word-break: break-all; }
+</style>
+</head>
+<body>
+<main>
+<h1>Nomadware <b>releases</b></h1>
+<p class="lead">One line installs any package: no toolchain, signature checked before anything runs.</p>
+@CARDS@
+<footer>
+<p>Every <code>SHA256SUMS</code> is signed (<code>ssh-keygen -Y sign</code>, namespace <code>nomadware-release</code>); <code>install.sh</code> verifies it against this key before it reads a hash:</p>
+<p><code>@KEY@</code></p>
+<p>Machine-readable: <a href="/index.json">index.json</a> · Source: <a href="https://github.com/fum4/releases">fum4/releases</a></p>
+</footer>
+</main>
+</body>
+</html>

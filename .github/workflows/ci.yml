@@ -1,0 +1,34 @@
+# The merge gate for every PR. The job name (check) is the required check of the repo's
+# ruleset (infra/github/ruleset.tf): renaming it is a ruleset change in the same PR.
+#
+# pull_request only, never also the push to master: a merged PR was already checked.
+# No paths filter: a required check that never reports blocks the PR forever.
+# The toolchain (shellcheck, terraform) comes from .mise.toml, the box hooks' pins.
+name: ci
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: jdx/mise-action@6be3c7ed4c21d4f76b208d351d95aac273ebb76d # v5.2.4
+        with:
+          install_args: shellcheck terraform
+      - name: lint
+        run: mise run lint
+      - name: terraform fmt + validate
+        run: mise run tf:check
+      - name: test
+        run: mise run test

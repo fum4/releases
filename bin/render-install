@@ -1,0 +1,31 @@
+#!/bin/sh
+# Print a package's install.sh: templates/install.sh with its name, binary, the public
+# base (config.env RELEASES_BASE) and the signing key (keys/nomadware-release.pub) filled in.
+#
+#   bin/render-install <pkg> > install.sh
+#
+# bin/publish uploads exactly this; a package that embeds its installer (ephedra's
+# go:embed) checks its copy against this output.
+set -eu
+
+ROOT=$(cd "$(dirname "$0")/.." && pwd)
+# shellcheck source=lib/common.sh
+. "$ROOT/lib/common.sh"
+
+[ $# -eq 1 ] || die "usage: render-install <pkg>"
+pkg=$1
+pkg_known "$pkg"
+binary=$(pkg_field "$pkg" 2)
+base=$(config_get RELEASES_BASE)
+signers=$(allowed_signers)
+
+# sed_escape: a value as a literal sed replacement (| is the delimiter below).
+sed_escape() { printf '%s\n' "$1" | sed 's/[\\&|]/\\&/g'; }
+
+sed -e "s|@PKG@|$(sed_escape "$pkg")|g" \
+	-e "s|@BINARY@|$(sed_escape "$binary")|g" \
+	-e "s|@BASE@|$(sed_escape "$base")|g" \
+	-e "s|@ALLOWED_SIGNERS@|$(sed_escape "$signers")|g" \
+	-e "s|@SIGN_IDENTITY@|$SIGN_IDENTITY|g" \
+	-e "s|@SIGN_NAMESPACE@|$SIGN_NAMESPACE|g" \
+	"$ROOT/templates/install.sh"

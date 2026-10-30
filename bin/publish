@@ -1,0 +1,288 @@
+#!/bin/sh
+# Publish one release of a package to releases.nomadware.io, then regenerate the index.
+#
+#   bin/publish <pkg> <tag> <dist-dir> [--dry-run]   # a release
+#   bin/publish --index-only [--dry-run]             # only regenerate index.html/.json
+#
+# <dist-dir> holds the release's binaries, named <binary>-<os>-<arch> (packages gives the
+# binary; linux/darwin × amd64/arm64, at least one). Steps, each stopping on failure:
+#   1. RELEASE ("<pkg> <tag>") and SHA256SUMS over it and them, signed (ssh-keygen -Y sign, namespace nomadware-release) and
+#      verified as install.sh will; install.sh rendered (bin/render-install).
+#   2. <pkg>/<tag>/… uploaded immutable: an object never changes once written (rclone
+#      --immutable), so a rerun after a failure is safe and a published tag is never
+#      released over.
+#   3. Every <pkg>/<tag>/ object read back over the public URL, its signature verified.
+#   4. <pkg>/install.sh, then <pkg>/latest last: the only objects ever overwritten.
+#   5. index.html / index.json regenerated from every package's latest (bin/render-index).
+# --dry-run builds and signs (when the key is set) into a temp dir, prints the uploads,
+# touches no bucket.
+#
+# Credentials come from the environment only (mise run publish reads them from
+# secrets/publish.env.age; the GitHub Action from Actions secrets):
+#   RELEASES_SIGNING_KEY           base64 of the nomadware-release ed25519 private key
+#   R2_RELEASES_ACCESS_KEY_ID      R2 token releases-publish (Object R/W, the bucket)
+#   R2_RELEASES_SECRET_ACCESS_KEY
+# Bucket, endpoint and public base: config.env. RELEASES_KEEP_OUT=<dir> keeps a dry run's
+# staged release and index there (the tests read them).
+set -eu
+
+ROOT=$(cd "$(dirname "$0")/.." && pwd)
+# shellcheck source=lib/common.sh
+. "$ROOT/lib/common.sh"
+
+CACHE_IMMUTABLE='Cache-Control: public, max-age=31536000, immutable'
+CACHE_MOVING='Cache-Control: public, max-age=60'
+CACHE_ASSET='Cache-Control: public, max-age=86400'
+
+usage() { die "usage: publish <pkg> <tag> <dist-dir> [--dry-run] | publish --index-only [--dry-run]"; }
+
+dry='' index_only='' pkg='' tag='' dist=''
+for arg in "$@"; do
+	case $arg in
+	--dry-run) dry=1 ;;
+	--index-only) index_only=1 ;;
+	-*) usage ;;
+	*) if [ -z "$pkg" ]; then pkg=$arg; elif [ -z "$tag" ]; then tag=$arg; elif [ -z "$dist" ]; then dist=$arg; else usage; fi ;;
+	esac
+done
+if [ -n "$index_only" ]; then
+	[ -z "$pkg" ] || usage
+else
+	[ -n "$dist" ] || usage
+	pkg_known "$pkg"
+	is_tag "$tag" || die "bad tag $tag: want vMAJOR.MINOR.PATCH, e.g. v0.1.0"
+	[ -d "$dist" ] || die "no such dist dir: $dist"
+fi
+
+BUCKET=$(config_get RELEASES_BUCKET)
+BASE=$(config_get RELEASES_BASE)
+ENDPOINT=$(config_get R2_RELEASES_ENDPOINT)
+REMOTE=r2:$BUCKET
+
+# quote / show print an argv as one line of shell input, so a dry run's commands paste as is.
+quote() {
+	case $1 in
+	'' | *[!A-Za-z0-9_./=:,+-]*) printf "'%s'\n" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")" ;;
+	*) printf '%s\n' "$1" ;;
+	esac
+}
+show() { for a in "$@"; do quote "$a"; done | paste -sd' ' -; }
+
+# One temp dir per run, and a key dir only while signing: EXIT removes both, never
+# anything a caller exported.
+work='' work_root='' keydir='' keydir_root=''
+rm_dirs() {
+	case $keydir in "$keydir_root"/releases-sign.?*) rm -rf "${keydir:?}" ;; esac
+	case $work in "$work_root"/releases-publish.?*) rm -rf "${work:?}" ;; esac
+}
+trap rm_dirs EXIT
+work_root=${TMPDIR:-/tmp}
+work_root=${work_root%/}
+work=$(mktemp -d "$work_root/releases-publish.XXXXXXXXXX") || die "cannot create a temp dir in $work_root"
+
+creds() { [ -n "${R2_RELEASES_ACCESS_KEY_ID:-}" ] && [ -n "${R2_RELEASES_SECRET_ACCESS_KEY:-}" ]; }
+
+# r2 runs rclone with its whole remote config from the environment: no key in argv or a
+# config file, RCLONE_CONFIG=/dev/null so a user's rclone.conf adds nothing, and
+# NO_CHECK_BUCKET because the token reaches objects in one bucket, not bucket creation.
+r2() {
+	RCLONE_CONFIG=/dev/null RCLONE_CONFIG_R2_TYPE=s3 RCLONE_CONFIG_R2_PROVIDER=Cloudflare \
+		RCLONE_CONFIG_R2_ENDPOINT=$ENDPOINT \
+		RCLONE_CONFIG_R2_ACCESS_KEY_ID=$R2_RELEASES_ACCESS_KEY_ID \
+		RCLONE_CONFIG_R2_SECRET_ACCESS_KEY=$R2_RELEASES_SECRET_ACCESS_KEY \
+		RCLONE_CONFIG_R2_NO_CHECK_BUCKET=true rclone "$@"
+}
+
+# key_dir_root prints where the signing key may touch disk: a tmpfs XDG_RUNTIME_DIR, or a
+# GitHub runner's RUNNER_TEMP (the VM is destroyed after the job). Never a persistent disk.
+key_dir_root() {
+	case ${XDG_RUNTIME_DIR:-} in
+	/*)
+		if [ "$(stat -f -c %T "$XDG_RUNTIME_DIR" 2>/dev/null)" = tmpfs ]; then
+			printf '%s\n' "${XDG_RUNTIME_DIR%/}"
+			return 0
+		fi
+		;;
+	esac
+	if [ "${GITHUB_ACTIONS:-}" = true ] && [ -d "${RUNNER_TEMP:-}" ]; then
+		printf '%s\n' "${RUNNER_TEMP%/}"
+		return 0
+	fi
+	die "the signing key goes only in a tmpfs XDG_RUNTIME_DIR (or a GitHub runner's RUNNER_TEMP): run it in a login session (/run/user/<uid>), then rerun"
+}
+
+stage() {
+	binary=$(pkg_field "$pkg" 2)
+	out=$work/out
+	mkdir "$out"
+	for f in "$dist"/*; do
+		[ -e "$f" ] || continue
+		name=${f##*/}
+		case " $(for t in $TARGETS; do printf '%s ' "$binary-$t"; done)" in
+		*" $name "*) ;;
+		*) die "$dist/$name is not a release asset: want only $binary-<os>-<arch> for $TARGETS" ;;
+		esac
+		[ -f "$f" ] || die "$f is not a file"
+	done
+	assets=''
+	for t in $TARGETS; do
+		[ -f "$dist/$binary-$t" ] || continue
+		cp "$dist/$binary-$t" "$out/" || die "cannot copy $dist/$binary-$t"
+		assets="$assets $binary-$t"
+	done
+	[ -n "$assets" ] || die "$dist has no $binary-<os>-<arch> binary"
+	# RELEASE names what the signature is for: install.sh refuses signed files that are
+	# another package's or another tag's.
+	printf '%s %s\n' "$pkg" "$tag" >"$out/RELEASE" || die "cannot write RELEASE"
+	# shellcheck disable=SC2086 # word-split on purpose: the asset names
+	(cd "$out" && sums $assets RELEASE >SHA256SUMS) || die "cannot write SHA256SUMS"
+	"$ROOT/bin/render-install" "$pkg" >"$out/install.sh" || die "cannot render install.sh"
+	echo "staged $pkg $tag:$assets" >&2
+}
+
+sign() {
+	if [ -z "${RELEASES_SIGNING_KEY:-}" ]; then
+		[ -n "$dry" ] || die "RELEASES_SIGNING_KEY is not set: run it as mise run publish (it reads secrets/publish.env.age), or pass it to the action"
+		echo "dry run: no RELEASES_SIGNING_KEY, so SHA256SUMS is not signed (a real run refuses)" >&2
+		return 0
+	fi
+	command -v ssh-keygen >/dev/null || die "no ssh-keygen on PATH: install openssh-client, then rerun"
+	keydir_root=$(key_dir_root)
+	keydir=$(mktemp -d "$keydir_root/releases-sign.XXXXXXXXXX") || die "cannot create a temp dir in $keydir_root"
+	(umask 077 && printf '%s' "$RELEASES_SIGNING_KEY" | base64 -d >"$keydir/key" 2>/dev/null) ||
+		die "RELEASES_SIGNING_KEY is not base64: it is the base64 of the private key file (secrets/publish.env.age)"
+	if ! ssh-keygen -q -Y sign -f "$keydir/key" -n "$SIGN_NAMESPACE" "$out/SHA256SUMS" >/dev/null 2>&1; then
+		die "ssh-keygen -Y sign failed: RELEASES_SIGNING_KEY must be the unencrypted nomadware-release ed25519 key; nothing is published"
+	fi
+	rm -rf "${keydir:?}"
+	keydir=''
+	sig_verify "$out" ||
+		die "SHA256SUMS.sig does not verify against keys/nomadware-release.pub: the key is not the release key; nothing is published"
+	echo "ok signed SHA256SUMS" >&2
+}
+
+# objects prints the versioned objects in upload order: binaries and RELEASE, then the sums that
+# vouch for them, then the pinned installer.
+objects() { for a in $assets; do echo "$a"; done; echo RELEASE; echo SHA256SUMS; echo SHA256SUMS.sig; echo install.sh; }
+
+preflight() {
+	command -v rclone >/dev/null || die "no rclone on PATH: run it through mise (mise run publish), or install rclone"
+	creds || die "R2_RELEASES_ACCESS_KEY_ID / R2_RELEASES_SECRET_ACCESS_KEY are not set: run it as mise run publish, or pass them to the action"
+	files=$(r2 lsf --files-only --max-depth 1 "$REMOTE/$pkg/") ||
+		die "cannot list $REMOTE/$pkg/: check the releases-publish token and the network"
+	# A tag dir alone is a run cut short: rerunning it is the recovery (identical objects are
+	# skipped, others refused by --immutable; ed25519 signatures are deterministic). Done is
+	# latest naming the tag; a tag older than latest would move latest backwards. Missing
+	# latest is a first release; one that is listed but unreadable stops the run (fail closed).
+	printf '%s\n' "$files" | grep -qxF latest || return 0
+	current=$(r2 cat "$REMOTE/$pkg/latest") || die "cannot read $REMOTE/$pkg/latest: check the network, then rerun"
+	current=$(printf '%s\n' "$current" | sed -n 1p)
+	is_tag "$current" || die "$BUCKET/$pkg/latest is '$current', not a tag: fix it before publishing"
+	if [ "$current" = "$tag" ]; then
+		die "$pkg $tag is already published: pick the next version (a release is never rewritten)"
+	fi
+	newest=$(printf '%s\n%s\n' "${current#v}" "${tag#v}" | sort -t. -k1,1n -k2,2n -k3,3n | tail -1)
+	[ "v$newest" = "$tag" ] || die "$pkg latest is $current, newer than $tag: publish a version after $current"
+}
+
+readback() {
+	back=$work/back
+	mkdir "$back"
+	for f in $(objects); do
+		curl -fsSL -o "$back/$f" "$BASE/$pkg/$tag/$f" ||
+			die "reading back $BASE/$pkg/$tag/$f failed: latest has not moved; check the custom domain, then rerun (uploads already done are skipped)"
+	done
+	sig_verify "$back" || die "$BASE/$pkg/$tag/SHA256SUMS.sig does not verify: latest has not moved; find out why before anyone installs $tag"
+	for f in $(objects); do
+		cmp -s "$out/$f" "$back/$f" || die "$BASE/$pkg/$tag/$f is not the file uploaded: latest has not moved"
+	done
+	echo "ok read back $BASE/$pkg/$tag/" >&2
+}
+
+upload() {
+	for f in $(objects); do
+		if [ -n "$dry" ]; then
+			show rclone copyto --immutable --checksum --header-upload "$CACHE_IMMUTABLE" "$out/$f" "$REMOTE/$pkg/$tag/$f"
+			continue
+		fi
+		r2 copyto --immutable --checksum --header-upload "$CACHE_IMMUTABLE" "$out/$f" "$REMOTE/$pkg/$tag/$f" ||
+			die "uploading $pkg/$tag/$f failed (an object already there with other bytes is never rewritten): latest has not moved; fix the cause, then rerun"
+		echo "uploaded $BUCKET/$pkg/$tag/$f" >&2
+	done
+	if [ -n "$dry" ]; then
+		echo "then read every $pkg/$tag/ object back from $BASE/$pkg/$tag/ and verify SHA256SUMS.sig"
+		show rclone copyto --checksum --header-upload "$CACHE_MOVING" "$out/install.sh" "$REMOTE/$pkg/install.sh"
+		echo "then, last: $pkg/latest = $tag"
+		return 0
+	fi
+	readback
+	r2 copyto --checksum --header-upload "$CACHE_MOVING" "$out/install.sh" "$REMOTE/$pkg/install.sh" ||
+		die "uploading $pkg/install.sh failed: latest has not moved; rerun"
+	printf '%s\n' "$tag" | r2 rcat --header-upload "$CACHE_MOVING" "$REMOTE/$pkg/latest" ||
+		die "writing $pkg/latest failed: every $tag object is up and latest still names the previous release; rerun"
+	echo "ok $pkg: latest is $tag" >&2
+}
+
+# index reads every package's latest release from the bucket into a state dir, renders
+# the index from it and uploads it with the page's fonts.
+index() {
+	state=$work/state
+	mkdir -p "$state"
+	if [ -n "$dry" ] && ! creds; then
+		echo "dry run: no R2 credentials, so the index renders from this release alone" >&2
+		if [ -n "$index_only" ]; then
+			echo "dry run: --index-only without credentials has nothing to read" >&2
+			return 0
+		fi
+		mkdir "$state/$pkg"
+		printf '%s\n' "$tag" >"$state/$pkg/latest"
+		cp "$out/SHA256SUMS" "$state/$pkg/"
+		date -u +%Y-%m-%d >"$state/$pkg/date"
+	else
+		command -v rclone >/dev/null || die "no rclone on PATH"
+		for p in $(pkg_names); do
+			# Not released yet → not on the index; an unreadable bucket stops the run, so a
+			# network error never drops a package from the page.
+			files=$(r2 lsf --files-only --max-depth 1 "$REMOTE/$p/") || die "cannot list $REMOTE/$p/: rerun bin/publish --index-only"
+			printf '%s\n' "$files" | grep -qxF latest || continue
+			latest=$(r2 cat "$REMOTE/$p/latest") || die "cannot read $REMOTE/$p/latest: rerun bin/publish --index-only"
+			latest=$(printf '%s\n' "$latest" | sed -n 1p)
+			is_tag "$latest" || die "$BUCKET/$p/latest is '$latest', not a tag: fix it before the index can render"
+			mkdir "$state/$p"
+			printf '%s\n' "$latest" >"$state/$p/latest"
+			r2 cat "$REMOTE/$p/$latest/SHA256SUMS" >"$state/$p/SHA256SUMS" ||
+				die "cannot read $BUCKET/$p/$latest/SHA256SUMS"
+			r2 lsjson "$REMOTE/$p/$latest/SHA256SUMS" | sed -n 's/.*"ModTime":"\([0-9-]\{10\}\)T.*/\1/p' >"$state/$p/date"
+		done
+	fi
+	"$ROOT/bin/render-index" "$state" "$work/index"
+	for f in index.html index.json; do
+		if [ -n "$dry" ]; then
+			show rclone copyto --checksum --header-upload "$CACHE_MOVING" "$work/index/$f" "$REMOTE/$f"
+			continue
+		fi
+		r2 copyto --checksum --header-upload "$CACHE_MOVING" "$work/index/$f" "$REMOTE/$f" || die "uploading $f failed: rerun bin/publish --index-only"
+	done
+	if [ -n "$dry" ]; then
+		show rclone copy --checksum --header-upload "$CACHE_ASSET" "$ROOT/site" "$REMOTE/_assets"
+		[ -z "${RELEASES_KEEP_OUT:-}" ] || cp -R "$work/index" "$RELEASES_KEEP_OUT/index"
+		return 0
+	fi
+	r2 copy --checksum --header-upload "$CACHE_ASSET" "$ROOT/site" "$REMOTE/_assets" || die "uploading _assets failed: rerun bin/publish --index-only"
+	echo "ok index: $BASE/" >&2
+}
+
+if [ -z "$index_only" ]; then
+	stage
+	sign
+	if [ -n "$dry" ]; then
+		if creds; then preflight; fi
+		echo "dry run: would run"
+	else
+		preflight
+	fi
+	upload
+	# A dry run's staged release, for a test to inspect (it is a temp dir otherwise).
+	if [ -n "$dry" ] && [ -n "${RELEASES_KEEP_OUT:-}" ]; then cp -R "$out" "$RELEASES_KEEP_OUT/release"; fi
+fi
+index
