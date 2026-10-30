@@ -88,6 +88,8 @@ packages publishing at once can leave the index one release behind:
    Private: call `mise run publish` from its release task.
 4. Its first publish puts it on the index.
 
+A **legacy** package (no longer developed) skips all of that: add `| https://github.com/fum4/<repo> | legacy | <blog story URL>` to its line. It is listed in the index's Legacy section, its download links (`.dmg` / `.AppImage`) are read from the repo's latest GitHub release each time `bin/render-index` runs (a failed fetch fails the render), and it is never published to the bucket.
+
 ## Checks
 
 CI (`.github/workflows/ci.yml`, job `check`, the ruleset's required check) runs

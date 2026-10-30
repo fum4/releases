@@ -1,0 +1,46 @@
+{
+  "tag_name": "v0.0.66",
+  "published_at": "2026-03-24T14:25:46Z",
+  "assets": [
+    {
+      "name": "latest-mac.yml",
+      "browser_download_url": "https://github.com/fum4/openkit/releases/download/v0.0.66/latest-mac.yml"
+    },
+    {
+      "name": "OpenKit-0.0.66-arm64.dmg",
+      "browser_download_url": "https://github.com/fum4/openkit/releases/download/v0.0.66/OpenKit-0.0.66-arm64.dmg"
+    },
+    {
+      "name": "OpenKit-0.0.66-arm64.dmg.blockmap",
+      "browser_download_url": "https://github.com/fum4/openkit/releases/download/v0.0.66/OpenKit-0.0.66-arm64.dmg.blockmap"
+    },
+    {
+      "name": "OpenKit-0.0.66-arm64.zip",
+      "browser_download_url": "https://github.com/fum4/openkit/releases/download/v0.0.66/OpenKit-0.0.66-arm64.zip"
+    },
+    {
+      "name": "OpenKit-0.0.66-arm64.zip.blockmap",
+      "browser_download_url": "https://github.com/fum4/openkit/releases/download/v0.0.66/OpenKit-0.0.66-arm64.zip.blockmap"
+    },
+    {
+      "name": "OpenKit-0.0.66-x64.dmg",
+      "browser_download_url": "https://github.com/fum4/openkit/releases/download/v0.0.66/OpenKit-0.0.66-x64.dmg"
+    },
+    {
+      "name": "OpenKit-0.0.66-x64.dmg.blockmap",
+      "browser_download_url": "https://github.com/fum4/openkit/releases/download/v0.0.66/OpenKit-0.0.66-x64.dmg.blockmap"
+    },
+    {
+      "name": "OpenKit-0.0.66-x64.zip",
+      "browser_download_url": "https://github.com/fum4/openkit/releases/download/v0.0.66/OpenKit-0.0.66-x64.zip"
+    },
+    {
+      "name": "OpenKit-0.0.66-x64.zip.blockmap",
+      "browser_download_url": "https://github.com/fum4/openkit/releases/download/v0.0.66/OpenKit-0.0.66-x64.zip.blockmap"
+    },
+    {
+      "name": "OpenKit-0.0.66.AppImage",
+      "browser_download_url": "https://github.com/fum4/openkit/releases/download/v0.0.66/OpenKit-0.0.66.AppImage"
+    }
+  ]
+}

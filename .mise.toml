@@ -17,8 +17,8 @@ run = [
 ]
 
 [tasks.test]
-description = "install.sh and publisher tests: a file:// release home and a stand-in bucket, no network"
-run = ["sh test/install.test.sh", "sh test/publish.test.sh"]
+description = "install.sh, publisher and legacy-release tests: a file:// release home and a stand-in bucket, no network"
+run = ["sh test/install.test.sh", "sh test/publish.test.sh", "sh test/legacy.test.sh"]
 
 # -backend=false init into its own data dir: no creds needed. Providers resolve from
 # each stack's committed .terraform.lock.hcl.
