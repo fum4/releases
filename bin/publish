@@ -165,11 +165,18 @@ objects() { for a in $assets; do echo "$a"; done; echo SHA256SUMS; echo SHA256SU
 preflight() {
 	command -v rclone >/dev/null || die "no rclone on PATH: run it through mise (mise run publish), or install rclone"
 	creds || die "R2_RELEASES_ACCESS_KEY_ID / R2_RELEASES_SECRET_ACCESS_KEY are not set: run it as mise run publish, or pass them to the action"
-	listed=$(r2 lsf --dirs-only --max-depth 1 "$REMOTE/$pkg/") ||
+	r2 lsf --dirs-only --max-depth 1 "$REMOTE/$pkg/" >/dev/null ||
 		die "cannot list $REMOTE/$pkg/: check the releases-publish token and the network"
-	if printf '%s\n' "$listed" | grep -qxF "$tag/"; then
+	# A tag dir alone is a run cut short: rerunning it is the recovery (identical objects are
+	# skipped, others refused by --immutable; ed25519 signatures are deterministic). Done is
+	# latest naming the tag; a tag older than latest would move latest backwards.
+	current=$(r2 cat "$REMOTE/$pkg/latest" 2>/dev/null | sed -n 1p) || current=''
+	[ -n "$current" ] || return 0
+	if [ "$current" = "$tag" ]; then
 		die "$pkg $tag is already published: pick the next version (a release is never rewritten)"
 	fi
+	newest=$(printf '%s\n%s\n' "${current#v}" "${tag#v}" | sort -t. -k1,1n -k2,2n -k3,3n | tail -1)
+	[ "v$newest" = "$tag" ] || die "$pkg latest is $current, newer than $tag: publish a version after $current"
 }
 
 readback() {

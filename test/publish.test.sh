@@ -62,6 +62,16 @@ check 'fonts are up' test -f "$b/_assets/fonts/geist-latin-400-normal.woff2"
 check 'index.json is valid JSON' sh -c "jq -e '.packages[0].version == \"v1.2.0\" and (.packages[0].assets | length) == 4' '$b/index.json'"
 
 refuses 'a published tag is never released over' 'already published' creds "$PUBLISH" waker v1.2.0 "$SANDBOX/dist"
+refuses 'a tag older than latest' 'newer than v1.1.9' creds "$PUBLISH" waker v1.1.9 "$SANDBOX/dist"
+
+# A run cut short (versioned objects up, latest not moved) reruns to completion.
+fake_dist "$SANDBOX/dist13" waker v1.3.0
+check 'publish waker v1.3.0' creds "$PUBLISH" waker v1.3.0 "$SANDBOX/dist13"
+echo v1.2.0 >"$b/waker/latest"
+rm "$b/waker/v1.3.0/install.sh"
+check 'a rerun after a cut-short run' creds "$PUBLISH" waker v1.3.0 "$SANDBOX/dist13"
+check 'the rerun moved latest' test "$(cat "$b/waker/latest")" = v1.3.0
+check 'the rerun kept the signature (identical bytes)' test -f "$b/waker/v1.3.0/SHA256SUMS.sig"
 
 # A second package lands next to the first: the index lists both, in packages order.
 fake_dist "$SANDBOX/eph-dist" eph v0.2.0
