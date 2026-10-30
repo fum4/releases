@@ -112,6 +112,18 @@ check 'render-index' "$TREPO/bin/render-index" "$st" "$SANDBOX/idx"
 check 'html escapes &, <, >, quotes' grep -qF '&lt;b&gt;bold&lt;/b&gt; &amp; &quot;quoted&quot;' "$SANDBOX/idx/index.html"
 check 'json escapes quotes' sh -c "jq -e '.packages[0].description == \"<b>bold</b> & \\\"quoted\\\"\"' '$SANDBOX/idx/index.json'"
 check 'only built platforms are linked' sh -c "grep -c 'class=\"p\"' '$SANDBOX/idx/index.html' | grep -qx 1"
+check 'no source link when the package has none' sh -c "! grep -q 'class=\"src\"' '$SANDBOX/idx/index.html'"
+# A source: a GitHub-mark link by the name. Anything but a fum4 repo URL is refused, which
+# is also what keeps markup out of the href.
+sed -i.bak 's#^waker .*#waker | waker | desc | https://github.com/fum4/waker#' "$TREPO/packages"
+check 'render-index with a source' "$TREPO/bin/render-index" "$st" "$SANDBOX/idx"
+check 'the source link renders' grep -qF '<a class="src" href="https://github.com/fum4/waker" aria-label="Source on GitHub"><svg' "$SANDBOX/idx/index.html"
+check 'the source link is the only one' sh -c "[ \$(grep -c 'class=\"src\"' '$SANDBOX/idx/index.html') = 1 ]"
+for bad in 'http://github.com/fum4/waker' 'https://github.com/other/waker' 'https://github.com/fum4/' 'https://github.com/fum4/a/b' 'https://github.com/fum4/w"x' 'https://example.com/fum4/waker'; do
+	sed -i.bak "s#^waker .*#waker | waker | desc | $bad#" "$TREPO/packages"
+	refuses "source $bad is refused" 'must be https://github.com/fum4/<repo>' "$TREPO/bin/render-index" "$st" "$SANDBOX/idx"
+done
+sed -i.bak 's#^waker .*#waker | waker | desc#' "$TREPO/packages"
 echo latest >"$st/waker/latest"
 refuses 'a latest that is not a tag' 'not a vMAJOR' "$TREPO/bin/render-index" "$st" "$SANDBOX/idx"
 
