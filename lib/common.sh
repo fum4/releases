@@ -18,7 +18,7 @@ config_get() {
 	printf '%s\n' "$v"
 }
 
-# pkg_field name n prints field n (1 name, 2 binary, 3 description) of a
+# pkg_field name n prints field n (1 name, 2 binary, 3 description, 4 source) of a
 # package in ./packages, trimmed; fails when the package is not listed.
 pkg_field() {
 	awk -F'|' -v p="$1" -v n="$2" '
@@ -41,6 +41,14 @@ pkg_known() {
 		'' | -* | *[!a-z0-9-]*) die "packages: '$v' (package $1) must be lowercase letters, digits and dashes" ;;
 		esac
 	done
+	# The optional source link is rendered into an href: only a fum4 GitHub repo URL.
+	src=$(pkg_field "$1" 4)
+	case $src in
+	'') ;;
+	https://github.com/fum4/ | https://github.com/fum4/*[!A-Za-z0-9._-]*) die "packages: source of $1 must be https://github.com/fum4/<repo>, got '$src'" ;;
+	https://github.com/fum4/*) ;;
+	*) die "packages: source of $1 must be https://github.com/fum4/<repo>, got '$src'" ;;
+	esac
 	# The description goes into JSON and HTML: escaping covers quotes and markup, not
 	# control characters, so none get that far.
 	if pkg_field "$1" 3 | LC_ALL=C grep -q '[[:cntrl:]]'; then

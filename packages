@@ -1,9 +1,11 @@
 # Every package releases.nomadware.io serves, in index order. One per line:
 #
-#   name | binary | description
+#   name | binary | description | source
 #
 # name    the URL prefix (<base>/<name>/…); lowercase, digits, dashes
 # binary  what install.sh installs; release assets are <binary>-<os>-<arch>
+# source  optional: the package's public repo, https://github.com/fum4/<repo>; the index
+#         links it beside the name. Leave it off for a private package.
 # Adding a package: README.md § Adding a package.
-waker   | waker | Scale-to-zero for self-hosted apps: wakes an app on its first request, stops it after real inactivity.
+waker   | waker | Scale-to-zero for self-hosted apps: wakes an app on its first request, stops it after real inactivity. | https://github.com/fum4/waker
 ephedra | eph   | Run and schedule coding-agent sessions, jobs and leases across a fleet of Linux and macOS machines.

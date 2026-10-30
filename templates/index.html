@@ -3,10 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src '@SCRIPT_HASH@'; font-src 'self'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src '@SCRIPT_HASH@'; font-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'">
 <meta name="color-scheme" content="dark light">
-<title>Nomadware releases</title>
+<title>Releases</title>
 <meta name="description" content="Signed, one-line installs for every Nomadware package.">
+<link rel="icon" href="/_assets/favicon.ico" sizes="32x32">
+<link rel="icon" href="/_assets/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/_assets/apple-touch-icon.png">
 <link rel="alternate" type="application/json" href="/index.json">
 <link rel="preload" href="/_assets/fonts/geist-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
 <style>
@@ -82,6 +85,10 @@ h1 { margin: 0; font-size: 28px; font-weight: 600; letter-spacing: -0.02em; }
 .pkg { margin-top: 72px; }
 .pkg h2 { margin: 0; display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; font-size: 18px; font-weight: 600; }
 .pkg h2 a { text-decoration: none; }
+.name { display: inline-flex; align-items: center; gap: 8px; }
+.src { display: inline-flex; color: var(--dim); transition: color 0.15s; }
+.src:hover { color: var(--fg); }
+.src svg { width: 0.85em; height: 0.85em; fill: currentColor; }
 .meta { font-size: 14px; font-weight: 400; color: var(--dim); }
 .meta b { font-weight: 400; color: var(--accent); }
 .desc { margin: 8px 0 0; color: var(--dim); }
@@ -127,8 +134,8 @@ footer a { color: var(--dim); }
 </header>
 </div>
 <main>
-<h1>Nomadware releases</h1>
-<p class="lead">One line installs any package. The signature is checked before anything runs.</p>
+<h1>Releases</h1>
+<p class="lead">Everything we ship, one command away.</p>
 @CARDS@
 <footer>
 <p>Signed with <code>nomadware-release</code>: <code>@KEY@</code></p>

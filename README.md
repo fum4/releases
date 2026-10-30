@@ -26,10 +26,10 @@ own GitHub Actions (the action in [`action.yml`](action.yml)), private ones from
 | `bin/render-install` | `templates/install.sh` filled in for one package |
 | `bin/render-index` | `index.html` + `index.json` from every package's latest release |
 | `templates/` | the installer and the index page (Nomadware tokens, Geist, no JS, no external request) |
-| `packages` | every package: name, binary, one-line description, in index order |
+| `packages` | every package: name, binary, one-line description, optional public source repo, in index order |
 | `config.env` | public base URL, bucket, R2 endpoint |
 | `keys/` | the signing key's public half |
-| `site/` | the page's own fonts (Geist, OFL), uploaded to `_assets/` |
+| `site/` | the page's own fonts (Geist, OFL) and favicon set (copied from nomadware.io's `apps/marketing/public`), uploaded to `_assets/` |
 | `action.yml` | the composite GitHub Action wrapping `bin/publish` |
 | (no bucket here) | the R2 bucket `nomadware-releases` and its custom domain live in Nomadware.io's `infra/terraform/r2.tf`, whose Cloudflare token already holds R2 Edit (no second account-wide R2 key on the box) |
 | `infra/github/` | this repo's ruleset: CI's `check` is the required check |
@@ -81,7 +81,7 @@ packages publishing at once can leave the index one release behind:
 
 ## Adding a package
 
-1. A line in [`packages`](packages): `name | binary | description`.
+1. A line in [`packages`](packages): `name | binary | description`, plus `| https://github.com/fum4/<repo>` for a public package (the index links it by the name; a private one has none).
 2. Its build emits `<binary>-<os>-<arch>` for the platforms it supports (any of the four).
 3. Public repo: `mise run secrets:gh-push -- fum4/<repo>`, add the repo to
    `secrets/README.md` § Package repos' Actions secrets, add the step above.
