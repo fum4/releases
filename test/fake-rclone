@@ -1,0 +1,76 @@
+#!/bin/sh
+# A stand-in for the rclone subcommands bin/publish runs, backed by a local dir:
+# r2:<bucket>/<key> is $FAKE_BUCKETS/<bucket>/<key>. Every call is logged to $FAKE_LOG
+# (subcommand and destination), so a test can check what ran and in which order.
+set -eu
+: "${FAKE_BUCKETS:?}" "${FAKE_LOG:?}"
+[ "${RCLONE_CONFIG:-}" = /dev/null ] || { echo "fake-rclone: RCLONE_CONFIG must be /dev/null" >&2; exit 2; }
+
+path() { printf '%s/%s\n' "$FAKE_BUCKETS" "${1#r2:}"; }
+
+cmd=$1
+shift
+immutable='' args=''
+while [ $# -gt 0 ]; do
+	case $1 in
+	--immutable) immutable=1 ;;
+	--header-upload) shift ;;
+	--checksum | --dirs-only) ;;
+	--max-depth) shift ;;
+	*) args="$args
+$1" ;;
+	esac
+	shift
+done
+set -f
+IFS='
+'
+# shellcheck disable=SC2086 # the positional args, one per line
+set -- $args
+unset IFS
+set +f
+
+case $cmd in
+copyto)
+	dst=$(path "$2")
+	echo "copyto ${2#r2:}" >>"$FAKE_LOG"
+	if [ -n "$immutable" ] && [ -e "$dst" ]; then
+		cmp -s "$1" "$dst" || { echo "fake-rclone: $2 exists with other bytes" >&2; exit 1; }
+		exit 0
+	fi
+	mkdir -p "$(dirname "$dst")"
+	cp "$1" "$dst"
+	;;
+rcat)
+	dst=$(path "$1")
+	echo "rcat ${1#r2:}" >>"$FAKE_LOG"
+	mkdir -p "$(dirname "$dst")"
+	cat >"$dst"
+	;;
+cat)
+	echo "cat ${1#r2:}" >>"$FAKE_LOG"
+	cat "$(path "$1")"
+	;;
+lsf)
+	echo "lsf ${1#r2:}" >>"$FAKE_LOG"
+	d=$(path "$1")
+	[ -d "$d" ] || exit 0
+	for e in "$d"/*/; do [ -d "$e" ] && basename "$e" | sed 's|$|/|'; done
+	;;
+lsjson)
+	echo "lsjson ${1#r2:}" >>"$FAKE_LOG"
+	f=$(path "$1")
+	[ -e "$f" ] || { echo '[]'; exit 0; }
+	printf '[{"Path":"%s","ModTime":"%sT10:00:00.000000000Z"}]\n' "${f##*/}" "${FAKE_DATE:-2026-10-30}"
+	;;
+copy)
+	dst=$(path "$2")
+	echo "copy ${2#r2:}" >>"$FAKE_LOG"
+	mkdir -p "$dst"
+	cp -R "$1/." "$dst/"
+	;;
+*)
+	echo "fake-rclone: unexpected subcommand $cmd" >&2
+	exit 2
+	;;
+esac

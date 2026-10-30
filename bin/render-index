@@ -1,0 +1,91 @@
+#!/bin/sh
+# Render the bucket root's index.html and index.json from each package's latest release.
+#
+#   bin/render-index <state-dir> <out-dir>
+#
+# <state-dir>/<pkg>/ holds what bin/publish read from the bucket: latest (one tag line),
+# SHA256SUMS (that tag's) and date (YYYY-MM-DD, when that SHA256SUMS was uploaded). A
+# package with no latest is not released yet and is left out. Order and descriptions come
+# from ./packages. The page makes no external request and needs no JS: styles inline,
+# fonts from the bucket's own _assets/.
+set -eu
+
+ROOT=$(cd "$(dirname "$0")/.." && pwd)
+# shellcheck source=lib/common.sh
+. "$ROOT/lib/common.sh"
+
+[ $# -eq 2 ] || die "usage: render-index <state-dir> <out-dir>"
+state=$1 out=$2
+[ -d "$state" ] || die "no such state dir: $state"
+mkdir -p "$out"
+base=$(config_get RELEASES_BASE)
+
+html_esc() { printf '%s' "$1" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g; s/"/\&quot;/g'; }
+json_esc() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
+
+# platform_label os-arch: what a reader calls it.
+platform_label() {
+	case $1 in
+	linux-amd64) echo 'Linux x86-64' ;;
+	linux-arm64) echo 'Linux ARM64' ;;
+	darwin-amd64) echo 'macOS Intel' ;;
+	darwin-arm64) echo 'macOS Apple silicon' ;;
+	esac
+}
+
+html=$out/index.html.tmp json=$out/index.json.tmp
+cards='' entries='' n=0
+for pkg in $(pkg_names); do
+	pkg_known "$pkg"
+	[ -f "$state/$pkg/latest" ] || continue
+	binary=$(pkg_field "$pkg" 2)
+	desc=$(pkg_field "$pkg" 3)
+	tag=$(sed -n 1p "$state/$pkg/latest")
+	is_tag "$tag" || die "$pkg: latest is '$tag', not a vMAJOR.MINOR.PATCH tag"
+	date=$(sed -n 1p "$state/$pkg/date")
+	case $date in
+	[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]) ;;
+	*) die "$pkg: date is '$date', not YYYY-MM-DD" ;;
+	esac
+	rel=$base/$pkg/$tag
+	install="curl -fsSL $base/$pkg/install.sh | sh"
+	links='' assets=''
+	for t in $TARGETS; do
+		asset=$binary-$t
+		sha=$(awk -v a="$asset" '$2 == a || $2 == "*" a { print $1 }' "$state/$pkg/SHA256SUMS")
+		[ -n "$sha" ] || continue
+		case $sha in
+		*[!0-9a-f]*) die "$pkg $tag: SHA256SUMS has a bad hash for $asset" ;;
+		esac
+		links="$links<li><a href=\"$rel/$asset\">$(platform_label "$t")</a><span class=\"file\">$asset</span></li>"
+		[ -z "$assets" ] || assets="$assets,"
+		assets="$assets{\"platform\":\"$t\",\"name\":\"$asset\",\"url\":\"$rel/$asset\",\"sha256\":\"$sha\"}"
+	done
+	[ -n "$assets" ] || die "$pkg $tag: SHA256SUMS lists no $binary-<os>-<arch> asset"
+	cards="$cards<section class=\"pkg\" id=\"$pkg\">
+<header><h2>$pkg</h2><p class=\"ver\">$tag <span>· $date</span></p></header>
+<p class=\"desc\">$(html_esc "$desc")</p>
+<pre class=\"install\"><code>$(html_esc "$install")</code></pre>
+<ul class=\"dl\">$links</ul>
+<p class=\"sums\"><a href=\"$rel/SHA256SUMS\">SHA256SUMS</a> · <a href=\"$rel/SHA256SUMS.sig\">SHA256SUMS.sig</a> · <a href=\"$base/$pkg/install.sh\">install.sh</a></p>
+</section>
+"
+	[ "$n" = 0 ] || entries="$entries,"
+	entries="$entries
+    {\"name\":\"$pkg\",\"binary\":\"$binary\",\"description\":\"$(json_esc "$desc")\",\"version\":\"$tag\",\"date\":\"$date\",\"install\":\"$(json_esc "$install")\",\"sha256sums\":\"$rel/SHA256SUMS\",\"signature\":\"$rel/SHA256SUMS.sig\",\"assets\":[$assets]}"
+	n=$((n + 1))
+done
+[ -n "$cards" ] || cards='<p class="desc">Nothing released yet.</p>'
+
+{
+	printf '{\n  "base": "%s",\n  "signing_key": "%s",\n  "packages": [%s\n  ]\n}\n' \
+		"$base" "$(json_esc "$(cut -d' ' -f1,2 "$PUBKEY_FILE")")" "$entries"
+} >"$json"
+
+key=$(html_esc "$(cut -d' ' -f1,2 "$PUBKEY_FILE")")
+printf '%s\n' "$cards" >"$out/cards.tmp"
+sed -e "/@CARDS@/{r $out/cards.tmp" -e 'd' -e '}' -e "s|@KEY@|$key|" "$ROOT/templates/index.html" >"$html"
+rm -f "$out/cards.tmp"
+mv -f "$html" "$out/index.html"
+mv -f "$json" "$out/index.json"
+echo "rendered $out/index.html and index.json ($n packages)" >&2

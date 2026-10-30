@@ -1,0 +1,99 @@
+[tools]
+rclone = "1.75.2"      # bin/publish: the upload to the R2 bucket (action.yml pins the same)
+shellcheck = "0.11.0"  # lint
+terraform = "1.17.1"   # infra/terraform (the bucket) and infra/github (the ruleset)
+
+# Nothing to install: POSIX sh, plus the [tools] above.
+[tasks.setup]
+description = "First-time setup after clone (mise install)"
+run = "mise install"
+
+# ── Checks (CI runs these on every PR: .github/workflows/ci.yml) ─────────────
+[tasks.lint]
+description = "shellcheck every script, the rendered install.sh included"
+run = [
+  "shellcheck -x bin/* lib/common.sh templates/install.sh test/*.sh test/fake-rclone",
+  "bin/render-install waker | shellcheck -s sh -",
+]
+
+[tasks.test]
+description = "install.sh and publisher tests: a file:// release home and a stand-in bucket, no network"
+run = ["sh test/install.test.sh", "sh test/publish.test.sh"]
+
+# -backend=false init into its own data dir: no creds needed. Providers resolve from
+# each stack's committed .terraform.lock.hcl.
+[tasks."tf:check"]
+description = "Format-check + validate infra/terraform and infra/github, offline"
+env = { TF_DATA_DIR = ".terraform-check" }
+run = [
+  "terraform fmt -check -recursive infra",
+  "terraform -chdir=infra/terraform init -backend=false -input=false -lockfile=readonly >/dev/null",
+  "terraform -chdir=infra/terraform validate",
+  "terraform -chdir=infra/github init -backend=false -input=false -lockfile=readonly >/dev/null",
+  "terraform -chdir=infra/github validate",
+]
+
+# The hook tasks (devbox docs/ci.md § Public repos): fast feedback only, CI is the gate.
+[tasks.pre-push]
+description = "Static checks: shellcheck · terraform fmt/validate"
+depends = ["lint", "tf:check"]
+
+[tasks.pre-merge]
+description = "The tests CI runs, on the box (optional: CI is the gate)"
+depends = ["test"]
+
+# ── Publishing ────────────────────────────────────────────────────────────────
+# A private package publishes from the box: mise -C ~/code/releases run publish --
+# <pkg> <tag> <dist-dir> (absolute dist path). The signing key and the R2 token come in
+# memory from secrets/publish.env.age.
+[tasks.publish]
+description = "bin/publish with the signing key + R2 token in memory (mise run publish -- <pkg> <tag> <dist> [--dry-run])"
+run = "repo-secrets exec secrets/publish.env.age -- bin/publish"
+
+[tasks."publish:index"]
+description = "Regenerate index.html / index.json from the bucket alone"
+run = "repo-secrets exec secrets/publish.env.age -- bin/publish --index-only"
+
+# A public package's release workflow reads the same three secrets from its own Actions
+# secrets: push them there from the committed copy (devbox docs/repo-secrets.md § CI).
+# Rerun after every edit of publish.env.age, once merged. Drift: gh secret list -R <repo>.
+[tasks."secrets:gh-push"]
+description = "Sync secrets/publish.env.age (as committed on origin/master) into a package repo's Actions secrets (mise run secrets:gh-push -- fum4/<repo>)"
+run = "repo-secrets merge --ref origin/master secrets/publish.env.age | gh secret set -f - -R"
+
+# ── Infra (devbox docs/repo-secrets.md § Terraform via repo-secrets exec) ────
+# The AWS_* overrides stop a personal ~/.aws profile from shadowing the R2 state creds.
+[tasks.tf]
+description = "terraform in infra/terraform (the bucket) with the repo's secrets in memory (mise run tf -- plan)"
+run = "repo-secrets exec secrets/releases-terraform-state.env.age secrets/releases-terraform-cloudflare.env.age -- env -u AWS_PROFILE -u AWS_DEFAULT_PROFILE -u AWS_SESSION_TOKEN AWS_SHARED_CREDENTIALS_FILE=/dev/null AWS_CONFIG_FILE=/dev/null terraform -chdir=infra/terraform"
+
+# Provider auth is the devbox's own gh identity (prefix assignment: the token never
+# lands in argv).
+[tasks."tf:github"]
+description = "terraform in infra/github (the repo ruleset) with gh auth + R2 creds in memory (mise run tf:github -- plan)"
+run = '''GITHUB_TOKEN="$(gh auth token)" repo-secrets exec secrets/releases-terraform-state.env.age -- env -u AWS_PROFILE -u AWS_DEFAULT_PROFILE -u AWS_SESSION_TOKEN AWS_SHARED_CREDENTIALS_FILE=/dev/null AWS_CONFIG_FILE=/dev/null terraform -chdir=infra/github'''
+
+# ── Secrets (repo-secrets engine; devbox docs/repo-secrets.md) ─────────────
+[tasks."secrets:decrypt"]
+description = "Materialize file/sshkey secrets, then render the generated env files (with <age>s: only those rows)"
+run = "repo-secrets decrypt"
+
+[tasks."secrets:clean"]
+description = "Remove materialized plaintext a .age restores (--render: also the generated env files; --all: also ~/.ssh keys)"
+run = "repo-secrets clean"
+
+[tasks."secrets:encrypt"]
+description = "Re-encrypt file/sshkey secrets from their plaintext (unchanged ones left alone)"
+run = "repo-secrets encrypt"
+
+[tasks."secrets:render"]
+description = "Regenerate every render-row env file from committed config + secrets"
+run = "repo-secrets render"
+
+[tasks."secrets:edit"]
+description = "Edit one secret in a tmpfs copy, re-encrypt, re-render (mise run secrets:edit <age>)"
+run = "repo-secrets edit"
+
+[tasks."secrets:check"]
+description = "Every manifest row has its sources (exit 1 otherwise)"
+run = "repo-secrets check"

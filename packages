@@ -1,0 +1,9 @@
+# Every package releases.nomadware.io serves, in index order. One per line:
+#
+#   name | binary | description
+#
+# name    the URL prefix (<base>/<name>/…); lowercase, digits, dashes
+# binary  what install.sh installs; release assets are <binary>-<os>-<arch>
+# Adding a package: README.md § Adding a package.
+waker   | waker | Scale-to-zero for self-hosted apps: wakes an app on its first request, stops it after real inactivity.
+ephedra | eph   | Run and schedule coding-agent sessions, jobs and leases across a fleet of Linux and macOS machines.

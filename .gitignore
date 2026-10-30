@@ -1,0 +1,3 @@
+# Terraform working dirs (state is remote, in releases-backup)
+.terraform/
+.terraform-check/

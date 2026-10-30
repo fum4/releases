@@ -1,0 +1,81 @@
+# Publish a release to releases.nomadware.io from a package's own workflow: bin/publish,
+# with this repo's config, key and installer template. Linux runners only.
+#
+#   - uses: fum4/releases@v1
+#     with:
+#       package: waker
+#       version: ${{ github.ref_name }}
+#       dist: dist/release            # <binary>-<os>-<arch> files, nothing else
+#       signing-key: ${{ secrets.RELEASES_SIGNING_KEY }}
+#       r2-access-key-id: ${{ secrets.R2_RELEASES_ACCESS_KEY_ID }}
+#       r2-secret-access-key: ${{ secrets.R2_RELEASES_SECRET_ACCESS_KEY }}
+#
+# The three secrets are synced into the package repo from fum4/releases
+# secrets/publish.env.age (mise run secrets:gh-push -- fum4/<repo>), never typed by hand.
+name: Publish to releases.nomadware.io
+description: Sign, upload and index one release of a Nomadware package (fum4/releases bin/publish).
+
+inputs:
+  package:
+    description: The package's name in fum4/releases packages (the URL prefix)
+    required: true
+  version:
+    description: The release tag, vMAJOR.MINOR.PATCH
+    required: true
+  dist:
+    description: Directory of <binary>-<os>-<arch> binaries
+    required: true
+  signing-key:
+    description: RELEASES_SIGNING_KEY, base64 of the nomadware-release private key
+    required: true
+  r2-access-key-id:
+    description: R2_RELEASES_ACCESS_KEY_ID of the releases-publish token
+    required: true
+  r2-secret-access-key:
+    description: R2_RELEASES_SECRET_ACCESS_KEY of the releases-publish token
+    required: true
+  dry-run:
+    description: "true: build and sign, print the uploads, touch no bucket"
+    required: false
+    default: "false"
+
+runs:
+  using: composite
+  steps:
+    # rclone pinned by version and checksum (the same pin as .mise.toml), so a
+    # tampered download fails here instead of running with the publish token.
+    - name: Install rclone
+      shell: bash
+      env:
+        RCLONE_VERSION: v1.75.2
+        RCLONE_SHA256_AMD64: 349ac8fba6ff65d6247043f1750cdcb518ec5d500ef91463a10d37c0ccdf3702
+        RCLONE_SHA256_ARM64: 7e1e8d69654941b7b7df84ee74c5f7fb09cce7d5496947fb7bf16b55ff427d10
+      run: |
+        set -euo pipefail
+        case "$(uname -m)" in
+          x86_64) arch=amd64 want=$RCLONE_SHA256_AMD64 ;;
+          aarch64) arch=arm64 want=$RCLONE_SHA256_ARM64 ;;
+          *) echo "::error::no pinned rclone for $(uname -m)"; exit 1 ;;
+        esac
+        zip=rclone-$RCLONE_VERSION-linux-$arch.zip
+        dir=$RUNNER_TEMP/rclone
+        mkdir -p "$dir"
+        curl -fsSL -o "$dir/$zip" "https://downloads.rclone.org/$RCLONE_VERSION/$zip"
+        echo "$want  $dir/$zip" | sha256sum -c -
+        unzip -q -j -o "$dir/$zip" "*/rclone" -d "$dir"
+        echo "$dir" >>"$GITHUB_PATH"
+    - name: Publish
+      shell: bash
+      env:
+        RELEASES_SIGNING_KEY: ${{ inputs.signing-key }}
+        R2_RELEASES_ACCESS_KEY_ID: ${{ inputs.r2-access-key-id }}
+        R2_RELEASES_SECRET_ACCESS_KEY: ${{ inputs.r2-secret-access-key }}
+        PACKAGE: ${{ inputs.package }}
+        VERSION: ${{ inputs.version }}
+        DIST: ${{ inputs.dist }}
+        DRY_RUN: ${{ inputs.dry-run }}
+      run: |
+        set -euo pipefail
+        flags=()
+        if [ "$DRY_RUN" = true ]; then flags+=(--dry-run); fi
+        "$GITHUB_ACTION_PATH/bin/publish" "$PACKAGE" "$VERSION" "$DIST" "${flags[@]}"
