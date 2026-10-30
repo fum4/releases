@@ -18,8 +18,9 @@ config_get() {
 	printf '%s\n' "$v"
 }
 
-# pkg_field name n prints field n (1 name, 2 binary, 3 description, 4 source, 5 kind,
-# 6 story link) of a package in ./packages, trimmed; fails when the package is not listed.
+# pkg_field name n prints field n (1 name, 2 binary, 3 description, 4 source,
+# 5 post_install, 6 kind, 7 story link) of a package in ./packages, trimmed; an absent
+# trailing field prints empty, like an empty one. Fails when the package is not listed.
 pkg_field() {
 	awk -F'|' -v p="$1" -v n="$2" '
 		/^[[:space:]]*(#|$)/ { next }
@@ -31,24 +32,24 @@ pkg_field() {
 # pkg_names prints every package published through the bucket, in index order; legacy_names
 # the legacy ones (kind "legacy"), which are downloaded from their repo's GitHub release.
 pkg_names() {
-	awk -F'|' '/^[[:space:]]*(#|$)/ { next } { for (i = 1; i <= NF; i++) gsub(/^[[:space:]]+|[[:space:]]+$/, "", $i) } $5 != "legacy" { print $1 }' "$ROOT/packages"
+	awk -F'|' '/^[[:space:]]*(#|$)/ { next } { for (i = 1; i <= NF; i++) gsub(/^[[:space:]]+|[[:space:]]+$/, "", $i) } $6 != "legacy" { print $1 }' "$ROOT/packages"
 }
 legacy_names() {
-	awk -F'|' '/^[[:space:]]*(#|$)/ { next } { for (i = 1; i <= NF; i++) gsub(/^[[:space:]]+|[[:space:]]+$/, "", $i) } $5 == "legacy" { print $1 }' "$ROOT/packages"
+	awk -F'|' '/^[[:space:]]*(#|$)/ { next } { for (i = 1; i <= NF; i++) gsub(/^[[:space:]]+|[[:space:]]+$/, "", $i) } $6 == "legacy" { print $1 }' "$ROOT/packages"
 }
 
 # pkg_known: a package the bucket serves (publish, render-install, the index's main list).
 pkg_known() {
 	pkg_listed "$1"
-	[ "$(pkg_field "$1" 5)" != legacy ] || die "$1 is legacy: it is downloaded from its GitHub release, not the bucket"
+	[ "$(pkg_field "$1" 6)" != legacy ] || die "$1 is legacy: it is downloaded from its GitHub release, not the bucket"
 }
 
 # legacy_known: a legacy package needs a public source repo, and may carry a story link.
 legacy_known() {
 	pkg_listed "$1"
-	[ "$(pkg_field "$1" 5)" = legacy ] || die "$1 is not a legacy package"
+	[ "$(pkg_field "$1" 6)" = legacy ] || die "$1 is not a legacy package"
 	[ -n "$(pkg_field "$1" 4)" ] || die "packages: legacy package $1 needs a source repo (its downloads are that repo's GitHub release)"
-	story=$(pkg_field "$1" 6)
+	story=$(pkg_field "$1" 7)
 	case $story in
 	'') ;;
 	https://nomadware.io/blog/ | https://nomadware.io/blog/*[!a-z0-9-]*) die "packages: story of $1 must be https://nomadware.io/blog/<slug>, got '$story'" ;;
@@ -59,9 +60,9 @@ legacy_known() {
 
 pkg_listed() {
 	pkg_field "$1" 1 >/dev/null || die "unknown package '$1': add it to packages (README.md § Adding a package)"
-	case $(pkg_field "$1" 5) in
+	case $(pkg_field "$1" 6) in
 	'' | legacy) ;;
-	*) die "packages: kind of $1 must be empty or 'legacy', got '$(pkg_field "$1" 5)'" ;;
+	*) die "packages: kind of $1 must be empty or 'legacy', got '$(pkg_field "$1" 6)'" ;;
 	esac
 	# Both end up in URLs, object keys, file names and the rendered install.sh.
 	for v in "$1" "$(pkg_field "$1" 2)"; do
@@ -81,6 +82,20 @@ pkg_listed() {
 	# control characters, so none get that far.
 	if pkg_field "$1" 3 | LC_ALL=C grep -q '[[:cntrl:]]'; then
 		die "packages: the description of $1 has a control character"
+	fi
+	# The optional post-install step is arguments to the installed binary, never shell:
+	# install.sh word-splits it unquoted, so nothing beyond [a-z0-9 -] (no quote, glob,
+	# $, ;, |) gets into the rendered installer.
+	post=$(pkg_field "$1" 5)
+	if printf '%s' "$post" | LC_ALL=C grep -q '[^a-z0-9 -]'; then
+		die "packages: post_install of $1 must be arguments of lowercase letters, digits, dashes and spaces, got '$post'"
+	fi
+	case $post in
+	# A kind/story line written before the post_install column existed has "legacy" here.
+	legacy | 'legacy '*) die "packages: post_install of $1 is '$post': kind goes in column 6 (name | binary | description | source | post_install | kind | story)" ;;
+	esac
+	if [ -n "$post" ] && [ "$(pkg_field "$1" 6)" = legacy ]; then
+		die "packages: $1 is legacy (no installer): it cannot have a post_install"
 	fi
 }
 

@@ -14,6 +14,14 @@ before it reads a single hash, then installs to `~/.local/bin` (or `/usr/local/b
 root, or with `--system` via sudo). `--dry-run` changes nothing; `--binary PATH` installs a
 local file; everything after `--` runs the installed binary.
 
+A package with a setup step (`post_install` in [`packages`](packages), e.g. waker's
+`setup`) gets it once the install succeeded: on a terminal, `install.sh` asks
+`Set up <pkg> now? [Y/n]` and runs `<installed path> setup` with the answer and its input
+from `/dev/tty` (under `curl | sh` the script is stdin). No terminal, `CI` or
+`NONINTERACTIVE` set, or `--no-setup`: it prints `Next: run '<path> setup' …` instead.
+Args after `--` replace the step (that run is the next step). A failed step is reported
+with the command to rerun, and the installer still exits 0: the install itself succeeded.
+
 This repo is the one publisher every package goes through: public packages from their
 own GitHub Actions (the action in [`action.yml`](action.yml)), private ones from the box
 (`bin/publish`). Same signing, same layout, same installer.
@@ -26,7 +34,7 @@ own GitHub Actions (the action in [`action.yml`](action.yml)), private ones from
 | `bin/render-install` | `templates/install.sh` filled in for one package |
 | `bin/render-index` | `index.html` + `index.json` from every package's latest release |
 | `templates/` | the installer and the index page (Nomadware tokens, Geist, no JS, no external request) |
-| `packages` | every package: name, binary, one-line description, optional public source repo, in index order |
+| `packages` | every package: name, binary, one-line description, optional public source repo, optional post-install step, in index order |
 | `config.env` | public base URL, bucket, R2 endpoint |
 | `keys/` | the signing key's public half |
 | `site/` | the page's own fonts (Geist, OFL) and favicon set (copied from nomadware.io's `apps/marketing/public`), uploaded to `_assets/` |
@@ -81,14 +89,14 @@ packages publishing at once can leave the index one release behind:
 
 ## Adding a package
 
-1. A line in [`packages`](packages): `name | binary | description`, plus `| https://github.com/fum4/<repo>` for a public package (the index links it by the name; a private one has none).
+1. A line in [`packages`](packages): `name | binary | description`, plus `| https://github.com/fum4/<repo>` for a public package (the index links it by the name; a private one leaves it empty). A package with a first-run setup adds `| <args>`, the arguments its own binary takes (waker: `| setup`): words of lowercase letters, digits and dashes only, never shell (`bin/render-install` refuses anything else); the installer offers it as above. A private package with one keeps the empty source column: `name | binary | description | | setup`.
 2. Its build emits `<binary>-<os>-<arch>` for the platforms it supports (any of the four).
 3. Public repo: `mise run secrets:gh-push -- fum4/<repo>`, add the repo to
    `secrets/README.md` § Package repos' Actions secrets, add the step above.
    Private: call `mise run publish` from its release task.
 4. Its first publish puts it on the index.
 
-A **legacy** package (no longer developed) skips all of that: add `| https://github.com/fum4/<repo> | legacy | <blog story URL>` to its line. It is listed in the index's Legacy section, its download links (`.dmg` / `.AppImage`) are read from the repo's latest GitHub release each time `bin/render-index` runs (a failed fetch fails the render), and it is never published to the bucket.
+A **legacy** package (no longer developed) skips all of that: add `| https://github.com/fum4/<repo> | | legacy | <blog story URL>` to its line (the empty column is post_install, which a legacy package never has). It is listed in the index's Legacy section, its download links (`.dmg` / `.AppImage`) are read from the repo's latest GitHub release each time `bin/render-index` runs (a failed fetch fails the render), and it is never published to the bucket.
 
 ## Checks
 

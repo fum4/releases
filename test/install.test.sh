@@ -11,12 +11,13 @@ make_repo
 target=$(host_target)
 site=$SANDBOX/site
 
-# release tag: publish a signed waker <tag> into $site/waker/ the way the bucket lays it
-# out, via the publisher's own dry run (its staged files are the objects it uploads).
+# release tag [dist-maker]: publish a signed waker <tag> into $site/waker/ the way the
+# bucket lays it out, via the publisher's own dry run (its staged files are the objects it
+# uploads). dist-maker builds the binaries (default fake_dist).
 release() {
 	rm -rf "$SANDBOX/keep" "$SANDBOX/dist"
 	mkdir "$SANDBOX/keep"
-	fake_dist "$SANDBOX/dist" waker "$1"
+	"${2:-fake_dist}" "$SANDBOX/dist" waker "$1"
 	RELEASES_SIGNING_KEY=$TEST_KEY RELEASES_KEEP_OUT=$SANDBOX/keep \
 		"$TREPO/bin/publish" waker "$1" "$SANDBOX/dist" --dry-run >/dev/null 2>&1
 	mkdir -p "$site/waker/$1"
@@ -29,6 +30,10 @@ echo v1.1.0 >"$site/waker/latest"
 
 export HOME="$SANDBOX/home" NOMADWARE_RELEASES_BASE="file://$site"
 mkdir -p "$HOME"
+# waker has a setup step: never let a run reach the real terminal (a test run from one
+# would prompt), and start from no opt-out (CI sets CI=true); the setup tests set each.
+export NOMADWARE_RELEASES_TEST_TTY="$SANDBOX/no-tty"
+unset CI NONINTERACTIVE
 inst() { sh "$site/waker/install.sh" "$@"; }
 dest=$HOME/.local/bin/waker
 reset() { rm -rf "$HOME/.local"; }
@@ -124,5 +129,91 @@ check 'no record after --binary' test ! -e "$record"
 echo v1.0.0 >"$site/waker/latest"
 check 'no record, no guard' inst
 echo v1.1.0 >"$site/waker/latest"
+
+# ── post-install step: packages gives waker "setup" ───────────────────────────
+# setup_dist: like fake_dist, but `<binary> setup` records its args and the first line of
+# its stdin in $SETUP_LOG, then exits $SETUP_EXIT: what ran, and which input it read.
+setup_dist() {
+	mkdir -p "$1"
+	for t in linux-amd64 linux-arm64 darwin-amd64 darwin-arm64; do
+		# shellcheck disable=SC2016 # the fake binary's own $ expansions
+		printf '#!/bin/sh\nif [ "$1" = setup ]; then read -r line || true; echo "$* | $line" >"$SETUP_LOG"; exit "${SETUP_EXIT:-0}"; fi\necho "%s %s %s" "$@"\n' "$2" "$3" "$t" >"$1/$2-$t"
+		chmod 755 "$1/$2-$t"
+	done
+}
+release v2.0.0 setup_dist
+reset
+ttyf=$SANDBOX/tty slog=$SANDBOX/setup.log ilog=$SANDBOX/install.log
+echo piped >"$SANDBOX/stdin" # install.sh's own stdin: curl | sh has the script there
+next="Next: run '$dest setup' to configure waker."
+
+# setup_run answer [args…]: install v2.0.0 with "the terminal" a file holding answer and a
+# newline (none: no terminal at all; eof: a terminal that sends nothing) and stdin another
+# file; the run's output lands in $ilog, the step's record in $slog.
+setup_run() {
+	case $1 in
+	none) t=$SANDBOX/no-tty ;;
+	eof) t=$ttyf && : >"$t" ;;
+	*) t=$ttyf && printf '%s\n' "$1" >"$t" ;;
+	esac
+	shift
+	rm -f "$slog"
+	NOMADWARE_RELEASES_TEST_TTY=$t SETUP_LOG=$slog sh "$site/waker/install.sh" --version v2.0.0 "$@" <"$SANDBOX/stdin" >"$ilog" 2>&1
+}
+# with_env VAR=value answer [args…]: setup_run with VAR exported.
+# shellcheck disable=SC2163 # $1 is the VAR=value to export
+with_env() { (export "$1" && shift && setup_run "$@"); }
+printed_next() { grep -qxF "$next" "$ilog" && test ! -e "$slog" && ! grep -qF 'Set up waker now?' "$ttyf"; }
+ran_setup() { grep -qx "setup | $1" "$slog"; }
+skipped() { test ! -e "$slog" && grep -qxF "Skipped. $next" "$ilog"; }
+
+check 'no terminal: installs' setup_run none
+check 'no terminal: prints the next step, runs nothing' printed_next
+check 'prompt, yes: installs' setup_run y
+check 'prompt, yes: asked on the terminal' grep -qF 'Set up waker now? [Y/n] ' "$ttyf"
+check 'prompt, yes: ran setup, stdin from the terminal' ran_setup y
+check 'prompt, yes: no next-step line' sh -c "! grep -q '^Next:' '$ilog'"
+check 'prompt, Enter: runs' setup_run ''
+check 'prompt, Enter: ran setup' ran_setup ''
+check 'prompt, YES: runs' setup_run YES
+check 'prompt, YES: ran setup' ran_setup YES
+check 'prompt, no: installs' setup_run n
+check 'prompt, no: skipped, with the next step' skipped
+check 'prompt, end of input: installs' setup_run eof
+check 'prompt, end of input: skipped, with the next step' skipped
+check 'CI=1: installs' with_env CI=1 y
+check 'CI=1: no prompt, the next step' printed_next
+check 'NONINTERACTIVE=1: installs' with_env NONINTERACTIVE=1 y
+check 'NONINTERACTIVE=1: no prompt, the next step' printed_next
+check '--no-setup: installs' setup_run y --no-setup
+check '--no-setup: no prompt, the next step' printed_next
+check 'CI empty is not an opt-out' with_env CI= y
+check 'CI empty: ran setup' ran_setup y
+check 'args after --: run the binary' setup_run y -- status
+check 'args after --: no prompt, no next step, only the args run' sh -c "test ! -e '$slog' && ! grep -qF 'Set up' '$ttyf' && ! grep -q '^Next:' '$ilog' && grep -qx 'waker v2.0.0 $target status' '$ilog'"
+check '--dry-run: changes nothing' setup_run y --dry-run
+check '--dry-run: says it would offer setup, asks nothing' sh -c "grep -qxF \"dry run: would offer to run $dest setup\" '$ilog' && test ! -e '$slog' && ! grep -qF 'Set up' '$ttyf'"
+check 'a failing step still exits 0' with_env SETUP_EXIT=3 y
+check 'a failing step: it ran' ran_setup y
+check 'a failing step: reported, with how to rerun' grep -qF "'$dest setup' failed (exit 3); $dest is installed all the same: rerun '$dest setup'" "$ilog"
+check 'a failing step: the install stands' sh -c "'$dest' | grep -q '^waker v2.0.0 '"
+
+# A package without post_install: its installer has none of it.
+cp "$TREPO/packages" "$SANDBOX/packages.orig"
+sed -i.bak 's#^\(waker .*\) | setup$#\1#' "$TREPO/packages" && rm -f "$TREPO/packages.bak"
+check 'render an installer without post_install' sh -c "'$TREPO/bin/render-install' waker >'$SANDBOX/plain-install.sh'"
+check 'it renders POST_INSTALL empty' grep -qx "POST_INSTALL=''" "$SANDBOX/plain-install.sh"
+check 'no post_install: installs' sh -c "printf 'y\n' >'$ttyf' && rm -f '$slog' && NOMADWARE_RELEASES_TEST_TTY='$ttyf' SETUP_LOG='$slog' sh '$SANDBOX/plain-install.sh' --version v2.0.0 <'$SANDBOX/stdin' >'$ilog' 2>&1"
+check 'no post_install: nothing extra (no prompt, no next step)' sh -c "test ! -e '$slog' && ! grep -qF 'Set up' '$ttyf' && ! grep -qE '^(Next|Skipped)' '$ilog'"
+
+# render-install: post_install is arguments, never shell.
+for bad in 'setup; reboot' "\$(id)" 'Setup' 'setup --dir=/tmp' "setup 'x'" 'setup&' 'a*'; do
+	printf 'waker | waker | desc | | %s\n' "$bad" >"$TREPO/packages"
+	refuses "render-install refuses post_install '$bad'" 'post_install of waker must be' "$TREPO/bin/render-install" waker
+done
+printf 'waker | waker | desc | | setup --yes\n' >"$TREPO/packages"
+check 'render-install takes words and dashes' sh -c "'$TREPO/bin/render-install' waker | grep -qx \"POST_INSTALL='setup --yes'\""
+cp "$SANDBOX/packages.orig" "$TREPO/packages"
+check 'the shipped packages render waker with setup' sh -c "'$TREPO/bin/render-install' waker | grep -qx \"POST_INSTALL='setup'\""
 
 done_testing

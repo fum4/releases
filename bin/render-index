@@ -123,7 +123,7 @@ for pkg in $(legacy_names); do
 	legacy_known "$pkg"
 	desc=$(pkg_field "$pkg" 3)
 	source=$(pkg_field "$pkg" 4)
-	story=$(pkg_field "$pkg" 6)
+	story=$(pkg_field "$pkg" 7)
 	repo=${source#https://github.com/fum4/}
 	warn_unless_public "$source"
 	release=$(fetch_release "$repo")
