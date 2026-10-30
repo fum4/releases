@@ -6,7 +6,8 @@
 # <state-dir>/<pkg>/ holds what bin/publish read from the bucket: latest (one tag line),
 # SHA256SUMS (that tag's) and date (YYYY-MM-DD, when that SHA256SUMS was uploaded). A
 # package with no latest is not released yet and is left out. Order and descriptions come
-# from ./packages. The page makes no external request and needs no JS: styles inline,
+# from ./packages. The page makes no external request: styles inline, one inline script
+# (the copy buttons, allowed by its CSP hash; the page works without it),
 # fonts from the bucket's own _assets/.
 set -eu
 
@@ -22,16 +23,6 @@ base=$(config_get RELEASES_BASE)
 
 html_esc() { printf '%s' "$1" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g; s/"/\&quot;/g'; }
 json_esc() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
-
-# platform_label os-arch: what a reader calls it.
-platform_label() {
-	case $1 in
-	linux-amd64) echo 'Linux x86-64' ;;
-	linux-arm64) echo 'Linux ARM64' ;;
-	darwin-amd64) echo 'macOS Intel' ;;
-	darwin-arm64) echo 'macOS Apple silicon' ;;
-	esac
-}
 
 html=$out/index.html.tmp json=$out/index.json.tmp
 cards='' entries='' n=0
@@ -57,18 +48,18 @@ for pkg in $(pkg_names); do
 		case $sha in
 		*[!0-9a-f]*) die "$pkg $tag: SHA256SUMS has a bad hash for $asset" ;;
 		esac
-		links="$links<li><a href=\"$rel/$asset\">$(platform_label "$t")</a><span class=\"file\">$asset</span></li>"
+		links="$links<a class=\"p\" href=\"$rel/$asset\">${t%-*}/${t#*-}</a>"
 		[ -z "$assets" ] || assets="$assets,"
 		assets="$assets{\"platform\":\"$t\",\"name\":\"$asset\",\"url\":\"$rel/$asset\",\"sha256\":\"$sha\"}"
 	done
 	[ -n "$assets" ] || die "$pkg $tag: SHA256SUMS lists no $binary-<os>-<arch> asset"
-	cards="$cards<section class=\"pkg\" id=\"$pkg\">
-<header><h2>$pkg</h2><p class=\"ver\">$tag <span>· $date</span></p></header>
+	cards="$cards<article class=\"pkg\" id=\"$pkg\">
+<h2><a href=\"#$pkg\">$pkg</a> <span class=\"meta\"><b>$tag</b> · $date</span></h2>
 <p class=\"desc\">$(html_esc "$desc")</p>
-<pre class=\"install\"><code>$(html_esc "$install")</code></pre>
-<ul class=\"dl\">$links</ul>
-<p class=\"sums\"><a href=\"$rel/SHA256SUMS\">SHA256SUMS</a> · <a href=\"$rel/SHA256SUMS.sig\">SHA256SUMS.sig</a> · <a href=\"$base/$pkg/install.sh\">install.sh</a></p>
-</section>
+<div class=\"term\"><div class=\"term-bar\"><span class=\"lights\" aria-hidden=\"true\"><i></i><i></i><i></i></span><span class=\"term-label\">sh</span><button type=\"button\" class=\"copy\" data-copy=\"$(html_esc "$install")\" hidden>copy</button></div>
+<pre class=\"term-body\"><code><span class=\"prompt\" aria-hidden=\"true\">\$ </span><span class=\"line\">$(html_esc "$install")</span></code></pre></div>
+<p class=\"dl\"><span class=\"dl-label\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M12 4v11M7 10l5 5 5-5M5 20h14\"/></svg>Download</span>$links<a href=\"$rel/SHA256SUMS\">SHA256SUMS</a></p>
+</article>
 "
 	[ "$n" = 0 ] || entries="$entries,"
 	entries="$entries
@@ -83,8 +74,18 @@ done
 } >"$json"
 
 key=$(html_esc "$(cut -d' ' -f1,2 "$PUBKEY_FILE")")
+# The CSP allows exactly the page's one inline script, by hash: the bytes between <script>
+# and </script> (both on their own lines), hashed as the browser does, so editing the script
+# in the template can never leave a stale hash behind.
+script_hash=$(
+	{
+		printf '\n'
+		awk '/^<script>$/ { on = 1; next } /^<\/script>$/ { on = 0 } on' "$ROOT/templates/index.html"
+	} | openssl dgst -sha256 -binary | base64
+) || die "cannot hash the page's script (openssl)"
 printf '%s\n' "$cards" >"$out/cards.tmp"
-sed -e "/@CARDS@/{r $out/cards.tmp" -e 'd' -e '}' -e "s|@KEY@|$key|" "$ROOT/templates/index.html" >"$html"
+sed -e "/@CARDS@/{r $out/cards.tmp" -e 'd' -e '}' -e "s|@KEY@|$key|" -e "s|@SCRIPT_HASH@|sha256-$script_hash|" \
+	"$ROOT/templates/index.html" >"$html"
 rm -f "$out/cards.tmp"
 mv -f "$html" "$out/index.html"
 mv -f "$json" "$out/index.json"
