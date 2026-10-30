@@ -6,7 +6,15 @@
 #   install.sh --system            # /usr/local/bin, with sudo (root always installs there)
 #   install.sh --binary ./@BINARY@-linux-amd64   # a local file: no download, no signature
 #   install.sh --dry-run           # print what would happen, change nothing
+#   install.sh --no-setup          # never offer the package's setup step (see below)
 #   install.sh -- <args…>          # then run @BINARY@ <args…> (everything after --)
+#
+# A package with a setup step (fum4/releases packages, post_install) runs it once the
+# install succeeded: `<installed path> <args>` on a terminal after a [Y/n] prompt, the
+# answer and the step's stdin from /dev/tty (curl | sh has the script on stdin). No
+# terminal, CI or NONINTERACTIVE set, or --no-setup: it prints the command instead. Args
+# after -- skip it (that run is the next step). A failed step is reported and does not
+# fail the install. NOMADWARE_RELEASES_TEST_TTY replaces /dev/tty in the tests only.
 #
 # Puts @BINARY@ in ~/.local/bin (HOME must be absolute), or /usr/local/bin as root or with
 # --system. Releases are <base>/<tag>/@BINARY@-<os>-<arch>, SHA256SUMS and SHA256SUMS.sig,
@@ -27,11 +35,13 @@ RELEASE_BASE=@BASE@/@PKG@
 ALLOWED_SIGNERS='@ALLOWED_SIGNERS@'
 SIGN_IDENTITY=@SIGN_IDENTITY@
 SIGN_NAMESPACE=@SIGN_NAMESPACE@
+# Arguments for the installed binary once installed (empty: none); [a-z0-9 -] only.
+POST_INSTALL='@POST_INSTALL@'
 
 die() { echo "install.sh: $*" >&2; exit 1; }
 
 usage() {
-	die "usage: install.sh [--version vX.Y.Z | --binary PATH] [--system] [--dry-run] [-- $BINARY args…]"
+	die "usage: install.sh [--version vX.Y.Z | --binary PATH] [--system] [--dry-run] [--no-setup] [-- $BINARY args…]"
 }
 
 is_tag() {
@@ -112,17 +122,60 @@ verify_sums() {
 # say prints a step on stderr; a dry run prefixes what it would do.
 say() { if [ -n "$dry" ]; then echo "dry run: would $*" >&2; else echo "$*" >&2; fi; }
 
+# should_prompt_setup: a person can answer the setup prompt — the terminal ($tty) opens
+# for reading and for writing — and nobody opted out (--no-setup, CI, NONINTERACTIVE).
+# true, not ':': a failed redirection on a special builtin exits a non-interactive dash.
+# >> so the probe and the prompt never truncate the tests' answer file.
+should_prompt_setup() {
+	[ -z "$no_setup" ] && [ -z "${CI:-}" ] && [ -z "${NONINTERACTIVE:-}" ] || return 1
+	{ true <"$tty"; } 2>/dev/null && { true >>"$tty"; } 2>/dev/null
+}
+
+# post_install runs the package's setup step from the binary just installed, after a
+# prompt when should_prompt_setup, or prints it as the next step. Never fails the run:
+# the install itself succeeded, and a failed step is reported with how to rerun it.
+post_install() {
+	[ -n "$POST_INSTALL" ] || return 0
+	step="$dest $POST_INSTALL"
+	if [ -n "$dry" ]; then
+		say "offer to run $step"
+		return 0
+	fi
+	if ! should_prompt_setup; then
+		echo "Next: run '$step' to configure $PKG." >&2
+		return 0
+	fi
+	printf 'Set up %s now? [Y/n] ' "$PKG" >>"$tty"
+	answer=''
+	read -r answer <"$tty" || answer=${answer:-n} # end of input with no answer: no
+	case $answer in
+	'' | [Yy] | [Yy][Ee][Ss]) ;;
+	*)
+		echo "Skipped. Next: run '$step' to configure $PKG." >&2
+		return 0
+		;;
+	esac
+	rc=0
+	# shellcheck disable=SC2086 # split on purpose: words of [a-z0-9-] (bin/render-install checks)
+	"$dest" $POST_INSTALL <"$tty" || rc=$?
+	[ "$rc" = 0 ] ||
+		echo "install.sh: '$step' failed (exit $rc); $dest is installed all the same: rerun '$step' to finish setting it up" >&2
+	return 0
+}
+
 # The body is one function, called on the last line: a download cut short by curl | sh
 # defines nothing runnable instead of running half a script.
 main() {
-	version='' binary='' system='' dry=''
+	version='' binary='' system='' dry='' no_setup=''
 	tmp='' tmp_own='' tmp_root=''
+	tty=${NOMADWARE_RELEASES_TEST_TTY:-/dev/tty}
 	while [ $# -gt 0 ]; do
 		case $1 in
 		--version) [ $# -ge 2 ] || usage; version=$2; shift 2 ;;
 		--binary) [ $# -ge 2 ] || usage; binary=$2; shift 2 ;;
 		--system) system=1; shift ;;
 		--dry-run) dry=1; shift ;;
+		--no-setup) no_setup=1; shift ;;
 		--) shift; break ;;
 		*) usage ;;
 		esac
@@ -231,7 +284,11 @@ main() {
 	path_hint "$dir"
 
 	rm_tmp # exec replaces this shell, so the EXIT trap would never clean up
-	[ $# -gt 0 ] || exit 0
+	if [ $# -eq 0 ]; then
+		# Args after -- are the caller's own next step: no setup step on top of them.
+		post_install
+		exit 0
+	fi
 	if [ -n "$dry" ]; then
 		say "run $dest $*"
 		exit 0
