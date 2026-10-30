@@ -37,6 +37,12 @@
   --grid: 64px;
   --content-width: 1100px;
   --column: 640px;
+  --overlay-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+  --light-close: #ff5f57;
+  --light-min: #febc2e;
+  --light-max: #28c840;
+  --light-ring: rgba(0, 0, 0, 0.2);
+  --light-glyph: rgba(0, 0, 0, 0.6);
 }
 @media (prefers-color-scheme: light) {
   :root {
@@ -94,17 +100,42 @@ h1 { margin: 0; font-size: 28px; font-weight: 600; letter-spacing: -0.02em; }
 .desc { margin: 8px 0 0; color: var(--dim); }
 /* The install terminal: nomadware.io's blog code window (Nomadware.io apps/marketing
    src/styles/prose.css + window.css), dark in both schemes, as a terminal is. One line,
-   scrolling sideways when narrow, never wrapping. */
-.term { margin-top: 18px; overflow: hidden; border: 1px solid rgba(255, 255, 255, 0.07); border-radius: 12px; background: rgba(8, 8, 13, 0.88); color: #ecebf3; }
-@media (prefers-color-scheme: light) { .term { background: #0c0b12; border-color: rgba(0, 0, 0, 0.14); } }
-.term-bar { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-bottom: 1px solid rgba(255, 255, 255, 0.07); font: 400 12px/1.28 var(--mono); color: #7c7a91; }
-.lights { display: flex; gap: 6px; margin-right: auto; }
-.lights i { width: 10px; height: 10px; border-radius: 50%; opacity: 0.85; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.2); }
-.lights i:nth-child(1) { background: #ff5f57; }
-.lights i:nth-child(2) { background: #febc2e; }
-.lights i:nth-child(3) { background: #28c840; }
+   scrolling sideways when narrow, never wrapping. .window is the slot in the page,
+   [data-window-frame] what you see, [data-window-bar] its title bar, [data-window-body] what
+   folds away; the lights, the fold (.is-minimized) and the full screen (.is-max) are
+   window.css's, wired by the page's script. */
+.window { margin-top: 18px; }
+.window-frame { overflow: hidden; border: 1px solid rgba(255, 255, 255, 0.07); border-radius: 12px; background: rgba(8, 8, 13, 0.88); color: #ecebf3; }
+@media (prefers-color-scheme: light) { .window-frame { background: #0c0b12; border-color: rgba(0, 0, 0, 0.14); } }
+.window-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; border-bottom: 1px solid rgba(255, 255, 255, 0.07); font: 400 12px/1.28 var(--mono); color: #7c7a91; }
+.window-label { overflow: hidden; min-width: 0; margin-left: auto; white-space: nowrap; text-overflow: ellipsis; }
+
+/* ── window lights: window.css of nomadware.io's marketing app, verbatim bar the comments ── */
+.window-lights { --light-dot: 14px; --light-box-width: 24px; --light-box-height: 24px; display: flex; flex-shrink: 0; margin: calc((var(--light-dot) - var(--light-box-height)) / 2) calc((var(--light-dot) - var(--light-box-width)) / 2); }
+@media (hover: hover) and (pointer: fine) { .window-lights { --light-dot: 10px; --light-box-width: 16px; --light-box-height: 20px; } }
+.window-light { display: grid; place-items: center; width: var(--light-box-width); height: var(--light-box-height); padding: 0; border: 0; background: none; font: 700 calc(var(--light-dot) * 0.8) / 1 var(--mono); color: var(--light-glyph); }
+.window-light::before { content: ''; grid-area: 1 / 1; width: var(--light-dot); height: var(--light-dot); border-radius: 50%; opacity: 0.85; box-shadow: inset 0 0 0 1px var(--light-ring); }
+.window-light[data-window-action='close']::before { background: var(--light-close); }
+.window-light[data-window-action='minimize']::before { background: var(--light-min); }
+.window-light[data-window-action='maximize']::before { background: var(--light-max); }
+.window[data-window-ready] .window-light { cursor: pointer; }
+.window-light::after, .window-glyph { z-index: 1; grid-area: 1 / 1; opacity: 0; }
+.window-glyph { width: var(--light-dot); height: var(--light-dot); fill: currentColor; }
+.window.is-max .window-glyph-enter, .window:not(.is-max) .window-glyph-exit { display: none; }
+.window-light[data-window-action='close']::after { content: '×'; }
+.window-light[data-window-action='minimize']::after { content: '−'; }
+.window[data-window-ready] .window-lights:hover .window-light::after, .window[data-window-ready] .window-light:focus-visible::after, .window[data-window-ready] .window-lights:hover .window-glyph, .window[data-window-ready] .window-light:focus-visible .window-glyph { opacity: 1; }
+.window.is-minimized [data-window-bar] { border-bottom: 0; cursor: pointer; }
+:root.has-max-window { overflow: hidden; scrollbar-gutter: stable; }
+.window.is-max::before { content: ''; position: fixed; inset: 0; z-index: 30; background: var(--ink); }
+.window [data-window-frame]:focus-visible { outline: none; }
+.window.is-max [data-window-frame] { position: fixed; inset: 24px; z-index: 31; display: flex; flex-direction: column; box-shadow: var(--overlay-shadow); }
+.window.is-max [data-window-body] { display: flex; flex: 1; flex-direction: column; min-height: 0; overscroll-behavior: contain; }
+.window.is-max pre { flex: 1; overflow: auto; }
+@media (max-width: 640px) { .window.is-max [data-window-frame] { inset: 12px; } }
+
 /* Without JS the copy button stays hidden, the label shows, and one tap selects the line. */
-.copy { padding: 0; border: 0; background: none; color: #8a889c; font: inherit; cursor: pointer; }
+.copy { margin-left: auto; padding: 0; border: 0; background: none; color: #8a889c; font: inherit; cursor: pointer; }
 .copy:hover { color: #ecebf3; }
 .term-body { margin: 0; padding: 16px 20px; overflow-x: auto; white-space: pre; font: 400 13.5px/1.6 var(--mono); }
 .term-body code { font: inherit; }
@@ -144,12 +175,121 @@ footer a:hover, footer a:focus-visible { color: var(--fg); }
 </footer>
 </main>
 <script>
+// The install terminal's lights: nomadware.io's window behaviour (Nomadware.io apps/marketing
+// src/scripts/window/window-controls.ts, window-maximize.ts), without its analytics. Red takes
+// the window off the page until a refresh, yellow folds it to its bar (a click on the bar
+// unfolds), green is an in-page full screen (Esc, the button or the backdrop restores it).
+const LABELS = { close: 'Close', minimize: 'Minimize', maximize: 'Full screen', restore: 'Exit full screen' };
+const FOCUSABLE = 'a[href], button:not(:disabled), input:not(:disabled):not([tabindex="-1"]), textarea:not(:disabled), iframe, video[controls], [tabindex="0"]';
+const light = (action, name) => LABELS[action] + ': ' + name;
+
+function trapTab(event, frame) {
+  const items = [...frame.querySelectorAll(FOCUSABLE)];
+  const first = items[0];
+  const last = items[items.length - 1];
+  if (!first || !last) { event.preventDefault(); return; }
+  const active = document.activeElement;
+  if (event.shiftKey && (active === first || active === frame)) { event.preventDefault(); last.focus(); }
+  else if (!event.shiftKey && (active === last || !frame.contains(active))) { event.preventDefault(); first.focus(); }
+}
+
+function createMaximizer(root, frame, button, label, name) {
+  let returnFocus = null;
+  const isOpen = () => root.classList.contains('is-max');
+  const onKeydown = (event) => {
+    if (event.key === 'Escape') { event.preventDefault(); close(); }
+    else if (event.key === 'Tab') trapTab(event, frame);
+  };
+  const onBackdropClick = (event) => { if (event.target === root) close(); };
+  function open() {
+    if (isOpen()) return;
+    returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    root.style.height = root.getBoundingClientRect().height + 'px';
+    root.classList.add('is-max');
+    document.documentElement.classList.add('has-max-window');
+    frame.setAttribute('role', 'dialog');
+    frame.setAttribute('aria-modal', 'true');
+    frame.setAttribute('aria-label', label);
+    frame.tabIndex = -1;
+    button.setAttribute('aria-label', light('restore', name));
+    if (!frame.contains(document.activeElement)) frame.focus({ preventScroll: true });
+    document.addEventListener('keydown', onKeydown);
+    root.addEventListener('click', onBackdropClick);
+  }
+  function close(options) {
+    if (!isOpen()) return;
+    root.classList.remove('is-max');
+    root.style.removeProperty('height');
+    document.documentElement.classList.remove('has-max-window');
+    for (const attribute of ['role', 'aria-modal', 'aria-label', 'tabindex']) frame.removeAttribute(attribute);
+    button.setAttribute('aria-label', light('maximize', name));
+    document.removeEventListener('keydown', onKeydown);
+    root.removeEventListener('click', onBackdropClick);
+    if (!options || options.restoreFocus !== false) { if (returnFocus && returnFocus.isConnected) returnFocus.focus({ preventScroll: true }); }
+    returnFocus = null;
+  }
+  return { isOpen, open, close };
+}
+
+function initWindow(root) {
+  const frame = root.querySelector('[data-window-frame]');
+  const bar = root.querySelector('[data-window-bar]');
+  const body = root.querySelector('[data-window-body]');
+  const lights = bar && bar.querySelector('.window-lights');
+  const button = (action) => root.querySelector('[data-window-action="' + action + '"]');
+  const close = button('close');
+  const minimize = button('minimize');
+  const maximize = button('maximize');
+  if (!frame || !bar || !body || !lights || !close || !minimize || !maximize) return;
+  const label = root.querySelector('.window-label').textContent;
+  const name = label + ' code';
+  const maximizer = createMaximizer(root, frame, maximize, label, name);
+  const isMinimized = () => root.classList.contains('is-minimized');
+  const setMinimized = (minimized) => {
+    if (minimized === isMinimized()) return;
+    root.classList.toggle('is-minimized', minimized);
+    body.hidden = minimized;
+    minimize.setAttribute('aria-expanded', String(!minimized));
+  };
+  lights.removeAttribute('aria-hidden');
+  for (const each of [close, minimize, maximize]) each.removeAttribute('tabindex');
+  minimize.setAttribute('aria-expanded', 'true');
+  root.dataset.windowReady = '';
+  // A click on the lights leaves focus where it was; keyboard focus on them is unaffected.
+  lights.addEventListener('mousedown', (event) => event.preventDefault());
+  close.addEventListener('click', () => {
+    maximizer.close({ restoreFocus: false });
+    let next = null;
+    for (let at = root; at && at !== document.body && !next; at = at.parentElement) next = at.nextElementSibling;
+    root.remove();
+    if (next) {
+      if (next.tabIndex < 0 && !next.hasAttribute('tabindex')) {
+        next.tabIndex = -1;
+        next.addEventListener('blur', () => next.removeAttribute('tabindex'), { once: true });
+      }
+      next.focus({ preventScroll: true });
+    }
+  });
+  minimize.addEventListener('click', () => { maximizer.close(); setMinimized(!isMinimized()); });
+  maximize.addEventListener('click', () => {
+    if (maximizer.isOpen()) maximizer.close();
+    else { setMinimized(false); maximizer.open(); }
+  });
+  // A folded window also unfolds from its bar (its buttons and links do their own thing).
+  bar.addEventListener('click', (event) => {
+    const onControl = event.target instanceof Element && event.target.closest('button, a');
+    if (!onControl && isMinimized()) setMinimized(false);
+  });
+}
+
+for (const root of document.querySelectorAll('[data-window]')) initWindow(root);
+
 for (const b of document.querySelectorAll('.copy')) {
   b.hidden = false;
   b.previousElementSibling.hidden = true;
   b.addEventListener('click', async () => {
     try { await navigator.clipboard.writeText(b.dataset.copy); b.textContent = 'copied'; }
-    catch { getSelection().selectAllChildren(b.closest('.term').querySelector('.line')); b.textContent = 'selected'; }
+    catch { getSelection().selectAllChildren(b.closest('.window').querySelector('.line')); b.textContent = 'selected'; }
     setTimeout(() => { b.textContent = 'copy'; }, 1500);
   });
 }

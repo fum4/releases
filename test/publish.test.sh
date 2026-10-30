@@ -93,6 +93,17 @@ csp_ok() {
 	[ -n "$want" ] && [ "$want" = "$got" ]
 }
 check 'the CSP allows exactly the inline script' csp_ok "$b/index.html"
+# The install window's DOM contract: nomadware.io's window-lights.test.ts + window-controls.ts
+# (the markup the blog renders, the hooks its script finds), applied to this static page.
+check 'every install window is a slot, frame, bar and body' sh -c "[ \$(grep -c 'data-window=\"code\"><div class=\"window-frame\" data-window-frame><div class=\"window-bar\" data-window-bar>' '$b/index.html') = 2 ] && [ \$(grep -c 'class=\"window-body\" data-window-body>' '$b/index.html') = 2 ]"
+check 'the lights are inert: aria-hidden, out of the tab order' sh -c "[ \$(grep -o '<span class=\"window-lights\" aria-hidden=\"true\">' '$b/index.html' | wc -l) = 2 ] && [ \$(grep -o 'class=\"window-light\" data-window-action=\"[a-z]*\" aria-label=\"[^\"]*\" tabindex=\"-1\">' '$b/index.html' | wc -l) = 6 ]"
+check 'the lights are real buttons labelled for the window' sh -c "grep -qF '<button type=\"button\" class=\"window-light\" data-window-action=\"close\" aria-label=\"Close: sh code\" tabindex=\"-1\">' '$b/index.html' && grep -qF 'data-window-action=\"minimize\" aria-label=\"Minimize: sh code\"' '$b/index.html' && grep -qF 'data-window-action=\"maximize\" aria-label=\"Full screen: sh code\"' '$b/index.html'"
+check 'the lights keep macOS order: close, minimize, full screen' sh -c "win_html() { tr '\n' ' ' <'$b/index.html'; }; win_html | grep -oE 'data-window-action=\"[a-z]+\"' | head -3 | paste -sd' ' - | grep -qx 'data-window-action=\"close\" data-window-action=\"minimize\" data-window-action=\"maximize\"'"
+check 'the green light draws both full-screen glyphs, hidden from assistive tech' sh -c "[ \$(grep -o 'class=\"window-glyph\" viewBox=\"0 0 10 10\" aria-hidden=\"true\"' '$b/index.html' | wc -l) = 2 ] && [ \$(grep -o 'class=\"window-glyph-enter\"' '$b/index.html' | wc -l) = 2 ] && [ \$(grep -o 'class=\"window-glyph-exit\"' '$b/index.html' | wc -l) = 2 ]"
+check 'the copy button sits in the bar, after the label' sh -c "win_html() { tr '\n' ' ' <'$b/index.html'; }; win_html | grep -q '<span class=\"window-label\">sh</span><button type=\"button\" class=\"copy\"'"
+check 'the script finds the hooks the markup carries' sh -c "for h in '[data-window]' '[data-window-frame]' '[data-window-bar]' '[data-window-body]' 'data-window-action=' 'is-minimized' 'is-max' 'has-max-window' 'windowReady'; do grep -qF \"\$h\" '$b/index.html' || { echo \"missing \$h\"; exit 1; }; done"
+check 'the lights are working buttons only once wired (no JS: decoration)' sh -c "grep -qF '.window[data-window-ready] .window-light { cursor: pointer; }' '$b/index.html' && grep -qF '.window[data-window-ready] .window-lights:hover .window-light::after' '$b/index.html'"
+check 'the fine-pointer lights are the blog'"'"'s 10px dots in 16px boxes' grep -qF '@media (hover: hover) and (pointer: fine) { .window-lights { --light-dot: 10px; --light-box-width: 16px; --light-box-height: 20px; } }' "$b/index.html"
 check 'the html makes no external request' sh -c "! grep -Eo '(src=\"https?:|url\(https?:|<link[^>]*href=\"https?:)' '$b/index.html' | grep -q ."
 
 # --index-only rebuilds from the bucket alone.
