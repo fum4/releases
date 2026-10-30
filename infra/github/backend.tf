@@ -1,5 +1,5 @@
-# State in the repo's own R2 bucket (releases-backup, EU), one key per stack: infra/terraform
-# (the bucket) takes terraform/releases.tfstate. Creds (AWS_ACCESS_KEY_ID/SECRET
+# State in the repo's own R2 bucket (releases-backup, EU), under its own key (a later
+# stack would take another). Creds (AWS_ACCESS_KEY_ID/SECRET
 # of the R2 token releases-terraform-state) come in memory from
 # secrets/releases-terraform-state.env.age via `mise run tf:github`.
 terraform {

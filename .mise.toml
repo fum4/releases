@@ -1,7 +1,7 @@
 [tools]
 rclone = "1.75.2"      # bin/publish: the upload to the R2 bucket (action.yml pins the same)
 shellcheck = "0.11.0"  # lint
-terraform = "1.17.1"   # infra/terraform (the bucket) and infra/github (the ruleset)
+terraform = "1.17.1"   # infra/github (the ruleset)
 
 # Nothing to install: POSIX sh, plus the [tools] above.
 [tasks.setup]
@@ -23,12 +23,10 @@ run = ["sh test/install.test.sh", "sh test/publish.test.sh"]
 # -backend=false init into its own data dir: no creds needed. Providers resolve from
 # each stack's committed .terraform.lock.hcl.
 [tasks."tf:check"]
-description = "Format-check + validate infra/terraform and infra/github, offline"
+description = "Format-check + validate infra/github, offline"
 env = { TF_DATA_DIR = ".terraform-check" }
 run = [
   "terraform fmt -check -recursive infra",
-  "terraform -chdir=infra/terraform init -backend=false -input=false -lockfile=readonly >/dev/null",
-  "terraform -chdir=infra/terraform validate",
   "terraform -chdir=infra/github init -backend=false -input=false -lockfile=readonly >/dev/null",
   "terraform -chdir=infra/github validate",
 ]
@@ -63,10 +61,6 @@ run = "repo-secrets merge --ref origin/master secrets/publish.env.age | gh secre
 
 # ── Infra (devbox docs/repo-secrets.md § Terraform via repo-secrets exec) ────
 # The AWS_* overrides stop a personal ~/.aws profile from shadowing the R2 state creds.
-[tasks.tf]
-description = "terraform in infra/terraform (the bucket) with the repo's secrets in memory (mise run tf -- plan)"
-run = "repo-secrets exec secrets/releases-terraform-state.env.age secrets/releases-terraform-cloudflare.env.age -- env -u AWS_PROFILE -u AWS_DEFAULT_PROFILE -u AWS_SESSION_TOKEN AWS_SHARED_CREDENTIALS_FILE=/dev/null AWS_CONFIG_FILE=/dev/null terraform -chdir=infra/terraform"
-
 # Provider auth is the devbox's own gh identity (prefix assignment: the token never
 # lands in argv).
 [tasks."tf:github"]

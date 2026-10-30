@@ -31,7 +31,7 @@ own GitHub Actions (the action in [`action.yml`](action.yml)), private ones from
 | `keys/` | the signing key's public half |
 | `site/` | the page's own fonts (Geist, OFL), uploaded to `_assets/` |
 | `action.yml` | the composite GitHub Action wrapping `bin/publish` |
-| `infra/terraform/` | the R2 bucket `nomadware-releases` (the custom domain is in Nomadware.io) |
+| (no bucket here) | the R2 bucket `nomadware-releases` and its custom domain live in Nomadware.io's `infra/terraform/r2.tf`, whose Cloudflare token already holds R2 Edit (no second account-wide R2 key on the box) |
 | `infra/github/` | this repo's ruleset: CI's `check` is the required check |
 | `secrets/` | the signing key and R2 tokens, age-encrypted ([`secrets/README.md`](secrets/README.md)) |
 | `test/` | installer and publisher tests: a `file://` release home, a stand-in bucket |

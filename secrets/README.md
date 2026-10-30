@@ -7,12 +7,11 @@ Encrypted with the repo's age key (`~/.config/age/releases.key`; recipients in
 |---|---|---|---|---|
 | `publish.env.age` | `RELEASES_SIGNING_KEY` — base64 of the `nomadware-release` ed25519 private key (public half: `keys/nomadware-release.pub`) | — (a key, not a token) | `mise run publish` (box: ephedra); package repos' Actions via `secrets:gh-push` | every publish (a new key also needs a new `keys/*.pub` and a release of every installer) |
 | `publish.env.age` | `R2_RELEASES_ACCESS_KEY_ID`, `R2_RELEASES_SECRET_ACCESS_KEY` | `releases-publish` — Account API token, Object Read & Write, bucket `nomadware-releases` only | same | every publish |
-| `releases-terraform-state.env.age` | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | `releases-terraform-state` — Account API token, Object Read & Write, bucket `releases-backup` only | `mise run tf`, `mise run tf:github` (state backend) | Terraform here |
-| `releases-terraform-cloudflare.env.age` | `CLOUDFLARE_API_TOKEN` | `releases-terraform-cloudflare` — Account API token, Workers R2 Storage: Edit | `mise run tf` (creates the bucket) | Terraform here |
+| `releases-terraform-state.env.age` | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | `releases-terraform-state` — Account API token, Object Read & Write, bucket `releases-backup` only | `mise run tf:github` (state backend) | Terraform here |
 
 Pending (minted by the owner, then added here as manifest rows): `releases-publish`'s two
-lines in `publish.env.age` (`mise run secrets:edit secrets/publish.env.age`), and the two
-`releases-terraform-*` files.
+lines in `publish.env.age` (`mise run secrets:edit secrets/publish.env.age`), and
+`releases-terraform-state.env.age`.
 
 The R2 endpoint, bucket and public base are config, not secrets: `../config.env`.
 
