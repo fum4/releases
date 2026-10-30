@@ -11,7 +11,7 @@ st=$SANDBOX/state idx=$SANDBOX/idx rel=$SANDBOX/releases
 mkdir -p "$st" "$rel"
 render() { "$TREPO/bin/render-index" "$st" "$idx"; }
 # only_legacy: a packages file with just the legacy row, so the bucket list is empty.
-printf '%s\n' 'openkit | openkit | The <b>platform</b> & "agents". | https://github.com/fum4/openkit | legacy | https://nomadware.io/blog/why-we-built-openkit' >"$TREPO/packages"
+printf '%s\n' 'openkit | openkit | The <b>platform</b> & "agents". | https://github.com/fum4/openkit | | legacy | https://nomadware.io/blog/why-we-built-openkit' >"$TREPO/packages"
 
 check 'render with a legacy package' render
 html=$idx/index.html
@@ -49,11 +49,15 @@ jq '.assets = [{name:"latest-mac.yml",browser_download_url:"https://github.com/f
 refuses 'a release with nothing to download' 'no .dmg or .AppImage' env RENDER_INDEX_RELEASES_DIR="$rel" "$TREPO/bin/render-index" "$st" "$idx"
 sed -i.bak 's,https://nomadware.io/blog/why-we-built-openkit,https://example.com/x,' "$TREPO/packages"
 refuses 'a story link off the blog' 'story of openkit must be' "$TREPO/bin/render-index" "$st" "$idx"
-printf '%s\n' 'openkit | openkit | desc | | legacy' >"$TREPO/packages"
+printf '%s\n' 'openkit | openkit | desc | | | legacy' >"$TREPO/packages"
 refuses 'a legacy package without a source' 'needs a source repo' "$TREPO/bin/render-index" "$st" "$idx"
-printf '%s\n' 'openkit | openkit | desc | https://github.com/fum4/openkit | legacy-ish' >"$TREPO/packages"
+printf '%s\n' 'openkit | openkit | desc | https://github.com/fum4/openkit | | legacy-ish' >"$TREPO/packages"
 refuses 'an unknown kind' 'kind of openkit' "$TREPO/bin/render-index" "$st" "$idx"
-printf '%s\n' 'openkit | openkit | desc | https://github.com/fum4/openkit | legacy' >"$TREPO/packages"
+printf '%s\n' 'openkit | openkit | desc | https://github.com/fum4/openkit | | legacy' >"$TREPO/packages"
 refuses 'a legacy package cannot be published' 'is legacy' env RELEASES_SIGNING_KEY="$TEST_KEY" "$TREPO/bin/publish" openkit v1.0.0 "$SANDBOX"
+printf '%s\n' 'openkit | openkit | desc | https://github.com/fum4/openkit | setup | legacy' >"$TREPO/packages"
+refuses 'a legacy package has no post_install' 'cannot have a post_install' "$TREPO/bin/render-index" "$st" "$idx"
+printf '%s\n' 'openkit | openkit | desc | https://github.com/fum4/openkit | legacy' >"$TREPO/packages"
+refuses 'kind in the post_install column (a pre-post_install line)' 'kind goes in column 6' "$TREPO/bin/render-index" "$st" "$idx"
 
 done_testing

@@ -1,16 +1,21 @@
 # Every package releases.nomadware.io serves, in index order. One per line:
 #
-#   name | binary | description | source | kind | story
+#   name | binary | description | source | post_install | kind | story
 #
 # name    the URL prefix (<base>/<name>/…); lowercase, digits, dashes
 # binary  what install.sh installs; release assets are <binary>-<os>-<arch>
 # source  optional: the package's public repo, https://github.com/fum4/<repo>; the index
-#         links it beside the name. Leave it off for a private package.
+#         links it beside the name. Leave it empty for a private package.
+# post_install  optional: arguments for the installed binary, run once install.sh has
+#         installed it (e.g. "setup" = run `<binary> setup`): offered as a [Y/n] prompt on a
+#         terminal, printed as the next step otherwise. Arguments only, never shell: words of
+#         lowercase letters, digits and dashes, separated by spaces (bin/render-install refuses
+#         anything else). Not for a legacy package (it has no installer).
 # kind    optional: "legacy" = no longer developed, no signed bucket, no installer. It is listed
 #         in the index's Legacy section and downloads straight from the source repo's latest
 #         GitHub release (needs a source; binary is unused there).
 # story   optional, legacy only: https://nomadware.io/blog/<slug>, linked as "why it stopped".
 # Adding a package: README.md § Adding a package.
-waker   | waker | Scale-to-zero for self-hosted apps: wakes an app on its first request, stops it after real inactivity. | https://github.com/fum4/waker
+waker   | waker | Scale-to-zero for self-hosted apps: wakes an app on its first request, stops it after real inactivity. | https://github.com/fum4/waker | setup
 ephedra | eph   | Run and schedule coding-agent sessions, jobs and leases across a fleet of Linux and macOS machines.
-openkit | openkit | The platform for your agents. | https://github.com/fum4/openkit | legacy | https://nomadware.io/blog/why-we-built-openkit
+openkit | openkit | The platform for your agents. | https://github.com/fum4/openkit | | legacy | https://nomadware.io/blog/why-we-built-openkit
