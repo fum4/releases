@@ -83,6 +83,7 @@ rm "$SANDBOX/eph-dist/eph-darwin-amd64"
 check 'publish ephedra v0.2.0 (three platforms)' creds "$PUBLISH" ephedra v0.2.0 "$SANDBOX/eph-dist"
 check 'the index lists both packages, in order' sh -c "jq -r '.packages[].name' '$b/index.json' | paste -sd' ' - | grep -qx 'waker ephedra'"
 check 'the index offers only the platforms built' sh -c "jq -e '(.packages[1].assets | map(.platform)) == [\"linux-amd64\",\"linux-arm64\",\"darwin-arm64\"]' '$b/index.json'"
+check 'the page links no platform the release lacks' sh -c "! grep -q 'ephedra/v0.2.0/eph-darwin-amd64' '$b/index.html' && [ \$(grep -o 'ephedra/v0.2.0/eph-[a-z0-9-]*\"' '$b/index.html' | sort -u | wc -l) = 3 ]"
 check 'the only script on the page is its own' sh -c "[ \$(grep -c '<script' '$b/index.html') = 1 ]"
 # Links to nomadware.io and GitHub are navigation, not requests: nothing the page loads (src=, url(), a stylesheet) leaves the bucket.
 # csp_ok page: the CSP's script hash is the page's inline script, hashed as a browser does.
