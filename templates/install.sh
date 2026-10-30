@@ -12,7 +12,11 @@
 # --system. Releases are <base>/<tag>/@BINARY@-<os>-<arch>, SHA256SUMS and SHA256SUMS.sig,
 # and <base>/latest; NOMADWARE_RELEASES_BASE replaces the base (a test serves file://).
 # SHA256SUMS must carry a signature that ssh-keygen -Y verify accepts against
-# ALLOWED_SIGNERS before any hash in it is read. No credential goes with a download.
+# ALLOWED_SIGNERS before any hash in it is read, and list a RELEASE file reading
+# "@PKG@ <tag>" (so another package's or tag's signed files are refused). latest is not
+# signed: it may not name a release older than the installed one (recorded in
+# <prefix>/share/nomadware-releases/@PKG@.version); --version downgrades on purpose.
+# No credential goes with a download.
 #
 # Rendered from fum4/releases templates/install.sh by bin/render-install: edit the template.
 set -eu
@@ -44,7 +48,18 @@ sha256() {
 	if command -v sha256sum >/dev/null; then sha256sum "$1"; else shasum -a 256 "$1"; fi | cut -d' ' -f1
 }
 
-fetch() { curl -fsSL -o "$2" "$1"; } # url out
+# fetch url out. Real downloads are https only, redirects included; file:// is the tests' release home.
+fetch() {
+	case $1 in
+	file://*) curl -fsSL -o "$2" "$1" ;;
+	*) curl --proto '=https' --proto-redir '=https' --tlsv1.2 -fsSL -o "$2" "$1" ;;
+	esac
+}
+
+# ver_gt a b: tag a is newer than tag b.
+ver_gt() {
+	[ "$1" != "$2" ] && [ "$(printf '%s\n%s\n' "${1#v}" "${2#v}" | sort -t. -k1,1n -k2,2n -k3,3n | tail -1)" = "${1#v}" ]
+}
 
 # mktmp makes this run's temp dir; rm_tmp removes exactly that dir and nothing else.
 mktmp() {
@@ -52,6 +67,7 @@ mktmp() {
 	tmp=$(mktemp -d "${tmp_root%/}/$PKG-install.XXXXXXXXXX") || die "cannot create a temp dir in $tmp_root"
 	tmp_own=$tmp
 	trap rm_tmp EXIT
+	trap 'exit 130' INT TERM # through EXIT, so an interrupt still cleans up
 }
 
 rm_tmp() {
@@ -132,6 +148,12 @@ main() {
 		dir=$HOME/.local/bin
 	fi
 	dest=$dir/$BINARY
+	# Which release is installed: the downgrade guard below reads it, a release install
+	# writes it, a --binary install (version unknown) removes it.
+	record=${dir%/bin}/share/nomadware-releases/$PKG.version
+	installed=''
+	if [ -f "$dest" ] && [ -f "$record" ]; then installed=$(sed -n 1p "$record"); fi
+	is_tag "$installed" || installed=''
 
 	if [ -z "$binary" ]; then
 		os=$(uname -s | tr '[:upper:]' '[:lower:]')
@@ -158,6 +180,11 @@ main() {
 			if [ "$(awk 'END { print NR }' "$tmp/latest")" != 1 ] || ! is_tag "$version"; then
 				die "$site/latest is not one vMAJOR.MINOR.PATCH line: refusing it; pin a release with --version vX.Y.Z"
 			fi
+			# latest is not signed: a latest older than what is installed is a downgrade nobody
+			# asked for. Going back is an explicit --version.
+			if [ -n "$installed" ] && ver_gt "$installed" "$version"; then
+				die "$site/latest is $version, older than the installed $installed: refusing to downgrade; pass --version $version to do it on purpose, and report it if you did not expect it"
+			fi
 		fi
 		base=$site/$version
 		fetch "$base/SHA256SUMS" "$tmp/SHA256SUMS" ||
@@ -166,6 +193,14 @@ main() {
 			die "download $base/SHA256SUMS.sig failed: a release without it is unsigned: do not use it, report it"
 		# Before any hash is read: an unsigned SHA256SUMS vouches for nothing.
 		verify_sums "$tmp"
+		# The signed sums vouch for RELEASE, and RELEASE names the package and tag they
+		# belong to: another package's or another tag's signed files are refused here.
+		rel=$(awk '$2 == "RELEASE" || $2 == "*RELEASE" { print $1 }' "$tmp/SHA256SUMS")
+		[ -n "$rel" ] || die "release $version has no signed RELEASE entry: do not use it, report it"
+		fetch "$base/RELEASE" "$tmp/RELEASE" || die "download $base/RELEASE failed: check the network"
+		[ "$(sha256 "$tmp/RELEASE")" = "$rel" ] || die "RELEASE does not match the signed SHA256SUMS: do not use it, report it"
+		[ "$(cat "$tmp/RELEASE")" = "$PKG $version" ] ||
+			die "$base is signed as '$(head -c 80 "$tmp/RELEASE")', not $PKG $version: do not use it, report it"
 		want=$(awk -v a="$asset" '$2 == a || $2 == "*" a { print $1 }' "$tmp/SHA256SUMS")
 		[ -n "$want" ] || die "release $version has no $asset (built for: $(awk '{ sub(/^\*/, "", $2); print $2 }' "$tmp/SHA256SUMS" | paste -sd' ' -))"
 		fetch "$base/$asset" "$tmp/$asset" || die "download $base/$asset failed: check the network"
@@ -183,6 +218,14 @@ main() {
 			$sudo mkdir -p "$dir" || die "cannot create $dir"
 			$sudo install -m 0755 "$binary" "$dest.new" || die "cannot write $dest.new"
 			$sudo mv -f "$dest.new" "$dest" || die "cannot replace $dest"
+		fi
+	fi
+	if [ -z "$dry" ]; then
+		if [ -n "$version" ]; then
+			$sudo mkdir -p "$(dirname "$record")" || die "cannot create $(dirname "$record")"
+			printf '%s\n' "$version" | $sudo tee "$record" >/dev/null || die "cannot write $record"
+		else
+			$sudo rm -f "$record"
 		fi
 	fi
 	path_hint "$dir"

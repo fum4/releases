@@ -55,7 +55,8 @@ refuses '--version with --binary' 'not both' inst --version v1.0.0 --binary "$SA
 refuses 'an unknown flag' 'usage' inst --frobnicate
 
 # Tampering: each refused, and nothing installed.
-tamper() { rm -rf "$site/waker/v6.6.6" && cp -R "$site/waker/v1.1.0" "$site/waker/v6.6.6"; }
+# tamper: a fresh, validly signed v6.6.6 to break one piece of.
+tamper() { rm -rf "$site/waker/v6.6.6" && release v6.6.6; }
 tamper
 printf '%064d  waker-%s\n' 0 "$target" >"$site/waker/v6.6.6/SHA256SUMS"
 refuses 'a SHA256SUMS edited after signing' 'does not verify' inst --version v6.6.6
@@ -74,7 +75,7 @@ tamper
 cp "$site/waker/v1.0.0/waker-$target" "$site/waker/v6.6.6/waker-$target"
 refuses 'a binary swapped after signing' 'checksum mismatch' inst --version v6.6.6
 tamper
-grep -v "waker-$target" "$site/waker/v1.1.0/SHA256SUMS" >"$SANDBOX/fewer" || true
+grep -v "waker-$target" "$site/waker/v6.6.6/SHA256SUMS" >"$SANDBOX/fewer" || true
 check 'a release missing this platform (setup)' sh -c "
 	cp '$SANDBOX/fewer' '$site/waker/v6.6.6/SHA256SUMS' && rm '$site/waker/v6.6.6/SHA256SUMS.sig' &&
 	ssh-keygen -q -Y sign -f '$SANDBOX/test-key' -n nomadware-release '$site/waker/v6.6.6/SHA256SUMS'"
@@ -88,5 +89,40 @@ refuses 'a latest that is not a tag' 'not one vMAJOR' inst
 echo v1.1.0 >"$site/waker/latest"
 
 refuses 'a relative HOME' 'not an absolute path' env HOME=relative sh "$site/waker/install.sh"
+
+# ── RELEASE: the signed sums name their package and tag ───────────────────────
+resign() { rm -f "$1/SHA256SUMS.sig" && ssh-keygen -q -Y sign -f "$SANDBOX/test-key" -n nomadware-release "$1/SHA256SUMS"; }
+rm -rf "$site/waker/v7.7.7" && cp -R "$site/waker/v1.0.0" "$site/waker/v7.7.7"
+refuses 'an older release served under a newer tag' "signed as 'waker v1.0.0', not waker v7.7.7" inst --version v7.7.7
+tamper
+echo 'ephedra v6.6.6' >"$site/waker/v6.6.6/RELEASE"
+(cd "$site/waker/v6.6.6" && sed -i.bak "s|^[0-9a-f]*  RELEASE\$|$(sha256sum RELEASE | cut -d' ' -f1)  RELEASE|" SHA256SUMS && rm SHA256SUMS.bak)
+resign "$site/waker/v6.6.6"
+refuses "another package's signed release" "signed as 'ephedra v6.6.6'" inst --version v6.6.6
+tamper
+echo 'waker v9.9.9' >"$site/waker/v6.6.6/RELEASE"
+refuses 'a RELEASE edited after signing' 'RELEASE does not match' inst --version v6.6.6
+tamper
+grep -v ' RELEASE$' "$site/waker/v6.6.6/SHA256SUMS" >"$SANDBOX/norel" && cp "$SANDBOX/norel" "$site/waker/v6.6.6/SHA256SUMS"
+resign "$site/waker/v6.6.6"
+refuses 'signed sums without RELEASE' 'no signed RELEASE' inst --version v6.6.6
+check 'none of those installed anything' test ! -e "$dest"
+
+# ── downgrade guard: latest is unsigned, so it may not go backwards ───────────
+record=$HOME/.local/share/nomadware-releases/waker.version
+check 'install the latest (v1.1.0)' inst
+check 'the installed release is recorded' test "$(cat "$record")" = v1.1.0
+echo v1.0.0 >"$site/waker/latest"
+refuses 'a latest older than the installed release' 'older than the installed v1.1.0' inst
+check 'the refused downgrade left v1.1.0' sh -c "'$dest' | grep -q '^waker v1.1.0 '"
+check '--version downgrades on purpose' inst --version v1.0.0
+check 'the record follows' test "$(cat "$record")" = v1.0.0
+echo v1.1.0 >"$site/waker/latest"
+check 'a newer latest upgrades' inst
+check '--binary forgets the record (version unknown)' inst --binary "$SANDBOX/local-waker"
+check 'no record after --binary' test ! -e "$record"
+echo v1.0.0 >"$site/waker/latest"
+check 'no record, no guard' inst
+echo v1.1.0 >"$site/waker/latest"
 
 done_testing

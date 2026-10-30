@@ -6,7 +6,7 @@
 #
 # <dist-dir> holds the release's binaries, named <binary>-<os>-<arch> (packages gives the
 # binary; linux/darwin × amd64/arm64, at least one). Steps, each stopping on failure:
-#   1. SHA256SUMS over them, signed (ssh-keygen -Y sign, namespace nomadware-release) and
+#   1. RELEASE ("<pkg> <tag>") and SHA256SUMS over it and them, signed (ssh-keygen -Y sign, namespace nomadware-release) and
 #      verified as install.sh will; install.sh rendered (bin/render-install).
 #   2. <pkg>/<tag>/… uploaded immutable: an object never changes once written (rclone
 #      --immutable), so a rerun after a failure is safe and a published tag is never
@@ -131,8 +131,11 @@ stage() {
 		assets="$assets $binary-$t"
 	done
 	[ -n "$assets" ] || die "$dist has no $binary-<os>-<arch> binary"
+	# RELEASE names what the signature is for: install.sh refuses signed files that are
+	# another package's or another tag's.
+	printf '%s %s\n' "$pkg" "$tag" >"$out/RELEASE" || die "cannot write RELEASE"
 	# shellcheck disable=SC2086 # word-split on purpose: the asset names
-	(cd "$out" && sums $assets >SHA256SUMS) || die "cannot write SHA256SUMS"
+	(cd "$out" && sums $assets RELEASE >SHA256SUMS) || die "cannot write SHA256SUMS"
 	"$ROOT/bin/render-install" "$pkg" >"$out/install.sh" || die "cannot render install.sh"
 	echo "staged $pkg $tag:$assets" >&2
 }
@@ -158,20 +161,23 @@ sign() {
 	echo "ok signed SHA256SUMS" >&2
 }
 
-# objects prints the versioned objects in upload order: binaries, then the sums that
+# objects prints the versioned objects in upload order: binaries and RELEASE, then the sums that
 # vouch for them, then the pinned installer.
-objects() { for a in $assets; do echo "$a"; done; echo SHA256SUMS; echo SHA256SUMS.sig; echo install.sh; }
+objects() { for a in $assets; do echo "$a"; done; echo RELEASE; echo SHA256SUMS; echo SHA256SUMS.sig; echo install.sh; }
 
 preflight() {
 	command -v rclone >/dev/null || die "no rclone on PATH: run it through mise (mise run publish), or install rclone"
 	creds || die "R2_RELEASES_ACCESS_KEY_ID / R2_RELEASES_SECRET_ACCESS_KEY are not set: run it as mise run publish, or pass them to the action"
-	r2 lsf --dirs-only --max-depth 1 "$REMOTE/$pkg/" >/dev/null ||
+	files=$(r2 lsf --files-only --max-depth 1 "$REMOTE/$pkg/") ||
 		die "cannot list $REMOTE/$pkg/: check the releases-publish token and the network"
 	# A tag dir alone is a run cut short: rerunning it is the recovery (identical objects are
 	# skipped, others refused by --immutable; ed25519 signatures are deterministic). Done is
-	# latest naming the tag; a tag older than latest would move latest backwards.
-	current=$(r2 cat "$REMOTE/$pkg/latest" 2>/dev/null | sed -n 1p) || current=''
-	[ -n "$current" ] || return 0
+	# latest naming the tag; a tag older than latest would move latest backwards. Missing
+	# latest is a first release; one that is listed but unreadable stops the run (fail closed).
+	printf '%s\n' "$files" | grep -qxF latest || return 0
+	current=$(r2 cat "$REMOTE/$pkg/latest") || die "cannot read $REMOTE/$pkg/latest: check the network, then rerun"
+	current=$(printf '%s\n' "$current" | sed -n 1p)
+	is_tag "$current" || die "$BUCKET/$pkg/latest is '$current', not a tag: fix it before publishing"
 	if [ "$current" = "$tag" ]; then
 		die "$pkg $tag is already published: pick the next version (a release is never rewritten)"
 	fi
@@ -235,7 +241,11 @@ index() {
 	else
 		command -v rclone >/dev/null || die "no rclone on PATH"
 		for p in $(pkg_names); do
-			latest=$(r2 cat "$REMOTE/$p/latest" 2>/dev/null) || continue
+			# Not released yet → not on the index; an unreadable bucket stops the run, so a
+			# network error never drops a package from the page.
+			files=$(r2 lsf --files-only --max-depth 1 "$REMOTE/$p/") || die "cannot list $REMOTE/$p/: rerun bin/publish --index-only"
+			printf '%s\n' "$files" | grep -qxF latest || continue
+			latest=$(r2 cat "$REMOTE/$p/latest") || die "cannot read $REMOTE/$p/latest: rerun bin/publish --index-only"
 			latest=$(printf '%s\n' "$latest" | sed -n 1p)
 			is_tag "$latest" || die "$BUCKET/$p/latest is '$latest', not a tag: fix it before the index can render"
 			mkdir "$state/$p"

@@ -13,7 +13,7 @@ The R2 endpoint, bucket and public base are config, not secrets: `../config.env`
 
 ## Package repos' Actions secrets
 
-A public package publishes from its own release workflow (`uses: fum4/releases@v1`), so
+A public package publishes from its own release workflow (`uses: fum4/releases@<sha> # v1`, pinned by commit), so
 `publish.env.age`'s three lines are its Actions secrets, pushed from here, never typed:
 
 ```sh

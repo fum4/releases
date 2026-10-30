@@ -10,11 +10,12 @@ path() { printf '%s/%s\n' "$FAKE_BUCKETS" "${1#r2:}"; }
 
 cmd=$1
 shift
-immutable='' args=''
+immutable='' files_only='' args=''
 while [ $# -gt 0 ]; do
 	case $1 in
 	--immutable) immutable=1 ;;
 	--header-upload) shift ;;
+	--files-only) files_only=1 ;;
 	--checksum | --dirs-only) ;;
 	--max-depth) shift ;;
 	*) args="$args
@@ -49,13 +50,20 @@ rcat)
 	;;
 cat)
 	echo "cat ${1#r2:}" >>"$FAKE_LOG"
+	# FAKE_CAT_FAILS: a read error (network, token) as rclone reports it.
+	[ -z "${FAKE_CAT_FAILS:-}" ] || { echo "fake-rclone: read failed" >&2; exit 1; }
 	cat "$(path "$1")"
 	;;
 lsf)
 	echo "lsf ${1#r2:}" >>"$FAKE_LOG"
 	d=$(path "$1")
 	[ -d "$d" ] || exit 0
-	for e in "$d"/*/; do [ -d "$e" ] && basename "$e" | sed 's|$|/|'; done
+	if [ -n "$files_only" ]; then
+		for e in "$d"/*; do [ -f "$e" ] && basename "$e"; done
+	else
+		for e in "$d"/*/; do [ -d "$e" ] && basename "$e" | sed 's|$|/|'; done
+	fi
+	exit 0
 	;;
 lsjson)
 	echo "lsjson ${1#r2:}" >>"$FAKE_LOG"

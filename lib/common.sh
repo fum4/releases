@@ -41,6 +41,11 @@ pkg_known() {
 		'' | -* | *[!a-z0-9-]*) die "packages: '$v' (package $1) must be lowercase letters, digits and dashes" ;;
 		esac
 	done
+	# The description goes into JSON and HTML: escaping covers quotes and markup, not
+	# control characters, so none get that far.
+	if pkg_field "$1" 3 | LC_ALL=C grep -q '[[:cntrl:]]'; then
+		die "packages: the description of $1 has a control character"
+	fi
 }
 
 # is_tag: $1 is vMAJOR.MINOR.PATCH, the only form a release is published under.

@@ -52,7 +52,7 @@ index.html, index.json, _assets/   the index, regenerated on every publish
 binaries in one directory named `<binary>-<os>-<arch>` and add
 
 ```yaml
-- uses: fum4/releases@v1
+- uses: fum4/releases@<full commit sha> # v1  (pin the sha: this step holds the signing key)
   with:
     package: waker
     version: ${{ github.ref_name }}

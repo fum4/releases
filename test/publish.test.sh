@@ -39,11 +39,12 @@ check 'refusals wrote nothing' test ! -s "$FAKE_LOG"
 mkdir "$SANDBOX/keep"
 check 'dry run' env RELEASES_SIGNING_KEY="$TEST_KEY" RELEASES_KEEP_OUT="$SANDBOX/keep" "$PUBLISH" waker v1.2.0 "$SANDBOX/dist" --dry-run
 rel=$SANDBOX/keep/release
-check 'SHA256SUMS lists the four binaries' test "$(awk '{ print $2 }' "$rel/SHA256SUMS" | paste -sd' ' -)" = \
-	'waker-linux-amd64 waker-linux-arm64 waker-darwin-amd64 waker-darwin-arm64'
+check 'SHA256SUMS lists the four binaries and RELEASE' test "$(awk '{ print $2 }' "$rel/SHA256SUMS" | paste -sd' ' -)" = \
+	'waker-linux-amd64 waker-linux-arm64 waker-darwin-amd64 waker-darwin-arm64 RELEASE'
 check 'SHA256SUMS matches the binaries' sh -c "cd '$rel' && sha256sum -c SHA256SUMS"
 check 'the signature verifies with the test key' sh -c "printf 'nomadware-release namespaces=\"nomadware-release\" %s\n' \"\$(cut -d' ' -f1,2 '$SANDBOX/test-key.pub')\" >'$SANDBOX/as' && ssh-keygen -Y verify -f '$SANDBOX/as' -I nomadware-release -n nomadware-release -s '$rel/SHA256SUMS.sig' <'$rel/SHA256SUMS'"
 check 'install.sh is bin/render-install output' sh -c "'$TREPO/bin/render-install' waker | cmp - '$rel/install.sh'"
+check 'RELEASE names the package and tag' test "$(cat "$rel/RELEASE")" = 'waker v1.2.0'
 check 'the dry run touched no bucket' test ! -s "$FAKE_LOG"
 check 'the signing key left no file' sh -c "! ls '$SANDBOX' | grep -q releases-sign"
 
@@ -63,6 +64,9 @@ check 'index.json is valid JSON' sh -c "jq -e '.packages[0].version == \"v1.2.0\
 
 refuses 'a published tag is never released over' 'already published' creds "$PUBLISH" waker v1.2.0 "$SANDBOX/dist"
 refuses 'a tag older than latest' 'newer than v1.1.9' creds "$PUBLISH" waker v1.1.9 "$SANDBOX/dist"
+refuses 'an unreadable latest fails closed' 'cannot read' env FAKE_CAT_FAILS=1 R2_RELEASES_ACCESS_KEY_ID=t R2_RELEASES_SECRET_ACCESS_KEY=t RELEASES_SIGNING_KEY="$TEST_KEY" "$PUBLISH" waker v1.9.0 "$SANDBOX/dist"
+refuses 'an unreadable bucket stops the index' 'cannot read' env FAKE_CAT_FAILS=1 R2_RELEASES_ACCESS_KEY_ID=t R2_RELEASES_SECRET_ACCESS_KEY=t "$PUBLISH" --index-only
+check 'RELEASE is uploaded' test "$(cat "$b/waker/v1.2.0/RELEASE")" = 'waker v1.2.0'
 
 # A run cut short (versioned objects up, latest not moved) reruns to completion.
 fake_dist "$SANDBOX/dist13" waker v1.3.0
@@ -101,5 +105,8 @@ check 'json escapes quotes' sh -c "jq -e '.packages[0].description == \"<b>bold<
 check 'only built platforms are linked' sh -c "grep -c 'class=\"file\"' '$SANDBOX/idx/index.html' | grep -qx 1"
 echo latest >"$st/waker/latest"
 refuses 'a latest that is not a tag' 'not a vMAJOR' "$TREPO/bin/render-index" "$st" "$SANDBOX/idx"
+
+printf 'waker | waker | tab\there\n' >"$TREPO/packages"
+refuses 'a control character in a description' 'control character' "$TREPO/bin/render-install" waker
 
 done_testing

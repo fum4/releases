@@ -1,7 +1,7 @@
 # Publish a release to releases.nomadware.io from a package's own workflow: bin/publish,
 # with this repo's config, key and installer template. Linux runners only.
 #
-#   - uses: fum4/releases@v1
+#   - uses: fum4/releases@<full commit sha> # v1   (never a bare @v1: this step gets the signing key)
 #     with:
 #       package: waker
 #       version: ${{ github.ref_name }}
@@ -12,6 +12,8 @@
 #
 # The three secrets are synced into the package repo from fum4/releases
 # secrets/publish.env.age (mise run secrets:gh-push -- fum4/<repo>), never typed by hand.
+# Pin the commit, not the tag: v1 moves, and whoever can move it would run code holding the
+# signing key and the upload token. Bump the sha deliberately, after reading the diff.
 name: Publish to releases.nomadware.io
 description: Sign, upload and index one release of a Nomadware package (fum4/releases bin/publish).
 
