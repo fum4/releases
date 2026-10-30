@@ -11,7 +11,10 @@ Nomadware.io `apps/marketing/src/components/site-nav.astro`, `logo-mark.astro`,
 `window.css`: frame, bar, lights, colours) for the install terminal, and of that window's behaviour
 (close / fold / in-page full screen, hover glyphs): `window.css`, `window-lights.ts`,
 `window-controls.ts`, `window-maximize.ts` ported to plain inline JS in the template and
-`bin/render-index`, minus the analytics. Nothing keeps them in
+`bin/render-index`, minus the analytics, and of the page's grid paper and column halo
+(`global.css` `.frame`, `tokens.css` `--grid*` / `--halo-column`; static, without the cursor
+warp of `grid-warp.ts`, the film grain and the site's no-light-scheme: light is the same lines in
+black). Nothing keeps them in
 step: a nav or window change on the site
 leaves this page stale. First step: a check in Nomadware.io (it has both sources on the
 box, and this repo is public, its CI can't read the private one) that extracts the nav's
