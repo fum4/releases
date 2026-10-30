@@ -48,7 +48,7 @@ for pkg in $(pkg_names); do
 		case $sha in
 		*[!0-9a-f]*) die "$pkg $tag: SHA256SUMS has a bad hash for $asset" ;;
 		esac
-		links="$links<a class=\"p\" href=\"$rel/$asset\">${t%-*}/${t#*-}</a> · "
+		links="$links<a class=\"p\" href=\"$rel/$asset\">${t%-*}/${t#*-}</a>"
 		[ -z "$assets" ] || assets="$assets,"
 		assets="$assets{\"platform\":\"$t\",\"name\":\"$asset\",\"url\":\"$rel/$asset\",\"sha256\":\"$sha\"}"
 	done
@@ -56,8 +56,9 @@ for pkg in $(pkg_names); do
 	cards="$cards<article class=\"pkg\" id=\"$pkg\">
 <h2><a href=\"#$pkg\">$pkg</a> <span class=\"meta\"><b>$tag</b> · $date</span></h2>
 <p class=\"desc\">$(html_esc "$desc")</p>
-<div class=\"cmd\"><code>$(html_esc "$install" | sed 's|/|/<wbr>|g')</code><button type=\"button\" class=\"copy\" data-copy=\"$(html_esc "$install")\" hidden>copy</button></div>
-<p class=\"dl\">$links<a href=\"$rel/SHA256SUMS\">SHA256SUMS</a></p>
+<div class=\"term\"><div class=\"term-bar\"><span class=\"lights\" aria-hidden=\"true\"><i></i><i></i><i></i></span><span class=\"term-label\">sh</span><button type=\"button\" class=\"copy\" data-copy=\"$(html_esc "$install")\" hidden>copy</button></div>
+<pre class=\"term-body\"><code><span class=\"prompt\" aria-hidden=\"true\">\$ </span><span class=\"line\">$(html_esc "$install")</span></code></pre></div>
+<p class=\"dl\"><span class=\"dl-label\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M12 4v11M7 10l5 5 5-5M5 20h14\"/></svg>Download</span>$links<a href=\"$rel/SHA256SUMS\">SHA256SUMS</a></p>
 </article>
 "
 	[ "$n" = 0 ] || entries="$entries,"
