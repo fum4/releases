@@ -61,8 +61,8 @@ legacy_known() {
 pkg_listed() {
 	pkg_field "$1" 1 >/dev/null || die "unknown package '$1': add it to packages (README.md § Adding a package)"
 	case $(pkg_field "$1" 6) in
-	'' | legacy) ;;
-	*) die "packages: kind of $1 must be empty or 'legacy', got '$(pkg_field "$1" 6)'" ;;
+	'' | legacy | desktop) ;;
+	*) die "packages: kind of $1 must be empty, 'desktop' or 'legacy', got '$(pkg_field "$1" 6)'" ;;
 	esac
 	# Both end up in URLs, object keys, file names and the rendered install.sh.
 	for v in "$1" "$(pkg_field "$1" 2)"; do
@@ -130,4 +130,11 @@ sig_verify() {
 	rc=$?
 	rm -f "$1/.allowed_signers"
 	return $rc
+}
+
+# Desktop packages add a universal macOS DMG covered by signed checksums. CLI target names
+# remain unchanged so existing installers only select executables.
+asset_targets() {
+ printf '%s\n' "$TARGETS"
+ if [ "$(pkg_field "$1" 6)" = desktop ]; then printf '%s\n' darwin-universal.dmg; fi
 }

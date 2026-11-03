@@ -113,24 +113,32 @@ key_dir_root() {
 
 stage() {
 	binary=$(pkg_field "$pkg" 2)
+	targets=$(asset_targets "$pkg")
 	out=$work/out
 	mkdir "$out"
 	for f in "$dist"/*; do
 		[ -e "$f" ] || continue
 		name=${f##*/}
-		case " $(for t in $TARGETS; do printf '%s ' "$binary-$t"; done)" in
+		case " $(for t in $targets; do printf '%s ' "$binary-$t"; done)" in
 		*" $name "*) ;;
 		*) die "$dist/$name is not a release asset: want only $binary-<os>-<arch> for $TARGETS" ;;
 		esac
 		[ -f "$f" ] || die "$f is not a file"
 	done
 	assets=''
-	for t in $TARGETS; do
+	cli_assets=''
+	for t in $targets; do
 		[ -f "$dist/$binary-$t" ] || continue
 		cp "$dist/$binary-$t" "$out/" || die "cannot copy $dist/$binary-$t"
 		assets="$assets $binary-$t"
+		case " $TARGETS " in
+		*" $t "*) cli_assets="$cli_assets $binary-$t" ;;
+		esac
 	done
-	[ -n "$assets" ] || die "$dist has no $binary-<os>-<arch> binary"
+	if [ "$(pkg_field "$pkg" 6)" = desktop ]; then
+		[ -f "$out/$binary-darwin-universal.dmg" ] || die "desktop package $pkg requires $binary-darwin-universal.dmg"
+	fi
+	[ -n "$cli_assets" ] || die "$dist has no $binary-<os>-<arch> binary"
 	# RELEASE names what the signature is for: install.sh refuses signed files that are
 	# another package's or another tag's.
 	printf '%s %s\n' "$pkg" "$tag" >"$out/RELEASE" || die "cannot write RELEASE"
