@@ -25,7 +25,7 @@ inputs:
     description: The release tag, vMAJOR.MINOR.PATCH
     required: true
   dist:
-    description: Directory of <binary>-<os>-<arch> binaries
+    description: Directory of <binary>-<os>-<arch> binaries and, for desktop packages, <binary>-darwin-universal.dmg
     required: true
   signing-key:
     description: RELEASES_SIGNING_KEY, base64 of the nomadware-release private key

@@ -103,3 +103,17 @@ A **legacy** package (no longer developed) skips all of that: add `| https://git
 CI (`.github/workflows/ci.yml`, job `check`, the ruleset's required check) runs
 `mise run lint` (shellcheck, the rendered installer included), `mise run tf:check` and
 `mise run test`. The box's `pre-push` runs lint + tf:check as fast feedback.
+
+## Desktop packages
+
+Set column 6 of `packages` to `desktop` for an actively maintained CLI + macOS app.
+Its distribution directory contains the CLI binaries above plus the required
+`<binary>-darwin-universal.dmg`. Apple Developer ID signing and notarization are separate from publisher checksum
+signing. oh-my-disk currently defers Apple notarization and the catalogue says so;
+its DMG is ad-hoc signed. This publisher includes
+that DMG in the signed checksums, immutable uploads, read-back verification, and
+release catalogue. Its asset has `kind: desktop` in `index.json`; CLI assets have
+`kind: cli`. The shell installer continues to install only the CLI.
+
+`oh-my-disk` is the first desktop package. It appears in the existing releases
+page after its first successful publish; it has no separate documentation page.

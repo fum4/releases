@@ -19,3 +19,5 @@
 waker   | waker | Scale-to-zero for self-hosted apps: wakes an app on its first request, stops it after real inactivity. | https://github.com/fum4/waker | setup
 ephedra | eph   | Run and schedule coding-agent sessions, jobs and leases across a fleet of Linux and macOS machines.
 openkit | openkit | The platform for your agents. | https://github.com/fum4/openkit | | legacy | https://nomadware.io/blog/why-we-built-openkit
+
+oh-my-disk | oh-my-disk | Explore disk usage, inspect folders and find space to reclaim. | https://github.com/fum4/oh-my-disk | | desktop
