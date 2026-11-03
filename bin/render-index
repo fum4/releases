@@ -82,15 +82,9 @@ for pkg in $(pkg_names); do
 		assets="$assets{\"kind\":\"$kind\",\"platform\":\"$t\",\"name\":\"$asset\",\"url\":\"$rel/$asset\",\"sha256\":\"$sha\"}"
 	done
 	[ -n "$assets" ] || die "$pkg $tag: SHA256SUMS lists no $binary-<os>-<arch> asset"
-	desktop_note=''
-	if [ "$(pkg_field "$pkg" 6)" = desktop ]; then
-		desktop_note='<p class="desc">macOS: Apple notarization is pending; macOS may block opening the download.</p>'
-		name_html="<img class=\"pkg-icon\" src=\"/_assets/$pkg.png\" width=\"32\" height=\"32\" alt=\"\">$name_html"
-	fi
 	cards="$cards<article class=\"pkg\" id=\"$pkg\">
 <h2>$name_html <span class=\"meta\"><b>$tag</b> · $date</span></h2>
 <p class=\"desc\">$(html_esc "$desc")</p>
-$desktop_note
 <div class=\"window\" data-window=\"code\"><div class=\"window-frame\" data-window-frame><div class=\"window-bar\" data-window-bar>$LIGHTS<span class=\"window-label\">sh</span><button type=\"button\" class=\"copy\" data-copy=\"$(html_esc "$install")\" hidden>copy</button></div>
 <div class=\"window-body\" data-window-body><pre class=\"term-body\"><code><span class=\"prompt\" aria-hidden=\"true\">\$ </span><span class=\"line\">$(html_esc "$install")</span></code></pre></div></div></div>
 <p class=\"dl\"><span class=\"dl-label\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M12 4v11M7 10l5 5 5-5M5 20h14\"/></svg>Download</span>$links<a href=\"$rel/SHA256SUMS\">SHA256SUMS</a></p>

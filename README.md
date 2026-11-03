@@ -109,8 +109,9 @@ CI (`.github/workflows/ci.yml`, job `check`, the ruleset's required check) runs
 Set column 6 of `packages` to `desktop` for an actively maintained CLI + macOS app.
 Its distribution directory contains the CLI binaries above plus the required
 `<binary>-darwin-universal.dmg`. Apple Developer ID signing and notarization are separate from publisher checksum
-signing. oh-my-disk currently defers Apple notarization and the catalogue says so;
-its DMG is ad-hoc signed. This publisher includes
+signing. oh-my-disk currently defers Apple notarization; its DMG is ad-hoc signed.
+Catalogue cards show package names without package icons or notarization notices.
+This publisher includes
 that DMG in the signed checksums, immutable uploads, read-back verification, and
 release catalogue. Its asset has `kind: desktop` in `index.json`; CLI assets have
 `kind: cli`. The shell installer continues to install only the CLI.

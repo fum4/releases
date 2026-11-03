@@ -22,6 +22,10 @@ check 'DMG is immutable release object' cmp "$SANDBOX/dist/oh-my-disk-darwin-uni
 check 'DMG is covered by signed checksums' grep -q 'oh-my-disk-darwin-universal.dmg' "$b/oh-my-disk/v1.0.0/SHA256SUMS"
 check 'catalogue exposes desktop kind and all five assets' jq -e '.packages[] | select(.name == "oh-my-disk") | (.assets | length) == 5 and ([.assets[] | select(.kind == "desktop") | .platform] == ["darwin-universal.dmg"])' "$b/index.json"
 check 'page offers direct universal DMG download' grep -q 'macOS app · Apple Silicon + Intel (.dmg)' "$b/index.html"
+omits() { ! grep -Eiq "$1" "$2"; }
+check 'page omits package icons and their styles' omits '<img|pkg-icon|/_assets/oh-my-disk.png' "$b/index.html"
+check 'page omits notarization warning' omits 'notari|macOS may block' "$b/index.html"
+check 'unused package icon is not uploaded' test ! -e "$b/_assets/oh-my-disk.png"
 check 'CLI installer remains present' test -f "$b/oh-my-disk/install.sh"
 cp "$SANDBOX/dist/oh-my-disk-darwin-universal.dmg" "$SANDBOX/dist/arbitrary.dmg"
 refuses 'unknown desktop file refused' 'not a release asset' creds "$TREPO/bin/publish" oh-my-disk v1.0.1 "$SANDBOX/dist"
