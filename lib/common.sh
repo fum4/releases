@@ -132,7 +132,7 @@ sig_verify() {
 	return $rc
 }
 
-# Desktop packages add a signed/notarized universal macOS DMG. CLI target names
+# Desktop packages add a universal macOS DMG covered by signed checksums. CLI target names
 # remain unchanged so existing installers only select executables.
 asset_targets() {
  printf '%s\n' "$TARGETS"
