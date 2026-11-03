@@ -12,7 +12,10 @@ set_base "file://$FAKE_BUCKETS/nomadware-releases"
 creds() { R2_RELEASES_ACCESS_KEY_ID=test R2_RELEASES_SECRET_ACCESS_KEY=test RELEASES_SIGNING_KEY=$TEST_KEY "$@"; }
 fake_dist "$SANDBOX/dist" oh-my-disk v1.0.0
 refuses 'desktop release requires DMG' 'requires.*darwin-universal.dmg' creds "$TREPO/bin/publish" oh-my-disk v1.0.0 "$SANDBOX/dist"
-printf 'notarized-dmg-fixture\n' >"$SANDBOX/dist/oh-my-disk-darwin-universal.dmg"
+mkdir "$SANDBOX/dmg-only"
+printf 'ad-hoc-signed-dmg-fixture\n' >"$SANDBOX/dmg-only/oh-my-disk-darwin-universal.dmg"
+refuses 'desktop release requires a CLI binary' 'has no oh-my-disk-<os>-<arch> binary' creds "$TREPO/bin/publish" oh-my-disk v1.0.0 "$SANDBOX/dmg-only"
+cp "$SANDBOX/dmg-only/oh-my-disk-darwin-universal.dmg" "$SANDBOX/dist/"
 check 'publish CLI and desktop together' creds "$TREPO/bin/publish" oh-my-disk v1.0.0 "$SANDBOX/dist"
 b=$FAKE_BUCKETS/nomadware-releases
 check 'DMG is immutable release object' cmp "$SANDBOX/dist/oh-my-disk-darwin-universal.dmg" "$b/oh-my-disk/v1.0.0/oh-my-disk-darwin-universal.dmg"

@@ -126,15 +126,19 @@ stage() {
 		[ -f "$f" ] || die "$f is not a file"
 	done
 	assets=''
+	cli_assets=''
 	for t in $targets; do
 		[ -f "$dist/$binary-$t" ] || continue
 		cp "$dist/$binary-$t" "$out/" || die "cannot copy $dist/$binary-$t"
 		assets="$assets $binary-$t"
+		case " $TARGETS " in
+		*" $t "*) cli_assets="$cli_assets $binary-$t" ;;
+		esac
 	done
 	if [ "$(pkg_field "$pkg" 6)" = desktop ]; then
 		[ -f "$out/$binary-darwin-universal.dmg" ] || die "desktop package $pkg requires $binary-darwin-universal.dmg"
 	fi
-	[ -n "$assets" ] || die "$dist has no $binary-<os>-<arch> binary"
+	[ -n "$cli_assets" ] || die "$dist has no $binary-<os>-<arch> binary"
 	# RELEASE names what the signature is for: install.sh refuses signed files that are
 	# another package's or another tag's.
 	printf '%s %s\n' "$pkg" "$tag" >"$out/RELEASE" || die "cannot write RELEASE"
