@@ -59,7 +59,11 @@ for pkg in $(pkg_names); do
 	[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]) ;;
 	*) die "$pkg: date is '$date', not YYYY-MM-DD" ;;
 	esac
-	name_html="<a href=\"#$pkg\">$pkg</a>"
+	case "$pkg" in
+	waker|oh-my-disk) title="<a class=\"product-title\" href=\"https://nomadware.io/$pkg\">$pkg</a>" ;;
+	*) title="<a href=\"#$pkg\">$pkg</a>" ;;
+	esac
+	name_html=$title
 	if [ -n "$source" ]; then
 		warn_unless_public "$source"
 		name_html="<span class=\"name\">$name_html<a class=\"src\" href=\"$(html_esc "$source")\" target=\"_blank\" rel=\"noopener noreferrer\" aria-label=\"Source on GitHub\">$GITHUB_MARK</a></span>"
@@ -87,7 +91,7 @@ for pkg in $(pkg_names); do
 <p class=\"desc\">$(html_esc "$desc")</p>
 <div class=\"window\" data-window=\"code\"><div class=\"window-frame\" data-window-frame><div class=\"window-bar\" data-window-bar>$LIGHTS<span class=\"window-label\">sh</span><button type=\"button\" class=\"copy\" data-copy=\"$(html_esc "$install")\" hidden>copy</button></div>
 <div class=\"window-body\" data-window-body><pre class=\"term-body\"><code><span class=\"prompt\" aria-hidden=\"true\">\$ </span><span class=\"line\">$(html_esc "$install")</span></code></pre></div></div></div>
-<p class=\"dl\"><span class=\"dl-label\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M12 4v11M7 10l5 5 5-5M5 20h14\"/></svg>Download</span>$links<a href=\"$rel/SHA256SUMS\">SHA256SUMS</a></p>
+<p class=\"dl\"><span class=\"dl-label\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M12 4v11M7 10l5 5 5-5M5 20h14\"/></svg>Download</span><span class=\"dl-links\">$links<a href=\"$rel/SHA256SUMS\">SHA256SUMS</a></span></p>
 </article>
 "
 	[ "$n" = 0 ] || entries="$entries,"
@@ -153,9 +157,9 @@ EOF
 	story_html=''
 	[ -z "$story" ] || story_html=" <a class=\"story\" href=\"$(html_esc "$story")\">why it stopped →</a>"
 	legacy_cards="$legacy_cards<article class=\"pkg\" id=\"$pkg\">
-<h2><span class=\"name\">$pkg<a class=\"src\" href=\"$(html_esc "$source")\" target=\"_blank\" rel=\"noopener noreferrer\" aria-label=\"Source on GitHub\">$GITHUB_MARK</a></span> <span class=\"tag\">legacy</span> <span class=\"meta\"><span class=\"ver\">$tag</span> · $date</span></h2>
+<h2><span class=\"name\">$title<a class=\"src\" href=\"$(html_esc "$source")\" target=\"_blank\" rel=\"noopener noreferrer\" aria-label=\"Source on GitHub\">$GITHUB_MARK</a></span> <span class=\"tag\">legacy</span> <span class=\"meta\"><span class=\"ver\">$tag</span> · $date</span></h2>
 <p class=\"desc\">$(html_esc "$desc")$story_html</p>
-<p class=\"dl\"><span class=\"dl-label\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M12 4v11M7 10l5 5 5-5M5 20h14\"/></svg>Download</span>$links</p>
+<p class=\"dl\"><span class=\"dl-label\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M12 4v11M7 10l5 5 5-5M5 20h14\"/></svg>Download</span><span class=\"dl-links\">$links</span></p>
 </article>
 "
 	[ "$legacy_n" = 0 ] || legacy_entries="$legacy_entries,"
