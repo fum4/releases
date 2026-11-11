@@ -1,6 +1,6 @@
 # Backlog
 
-Engineering follow-ups for this repo. Format and rules: devbox `docs/work/README.md`.
+Engineering follow-ups for this repo. Heading: `## <title> · <YYYY-MM-DD> · S|M|L`. `cerebro items file` adds to it.
 
 ## Top bar and terminal sync with nomadware.io · 2026-10-30 · S
 
